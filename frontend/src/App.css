@@ -1,0 +1,79 @@
+.app-layout {
+  height: 100vh;
+}
+
+.site-layout {
+  margin-left: 200px;
+}
+
+.site-layout-content {
+  margin: 24px 16px;
+  padding: 24px;
+  background: #fff;
+  border-radius: 6px;
+}
+
+@media (max-width: 768px) {
+  .site-layout {
+    margin-left: 0;
+  }
+}
+
+.dashboard-stats {
+  margin-bottom: 24px;
+}
+
+.dashboard-chart {
+  margin-bottom: 24px;
+}
+
+.page-header {
+  background: #fff;
+  padding: 16px 24px;
+  margin-bottom: 24px;
+  border-radius: 6px;
+}
+
+.campaign-card {
+  margin-bottom: 16px;
+  height: 100%;
+  transition: all 0.3s ease;
+}
+
+.campaign-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.campaign-card .ant-card-head {
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.campaign-card .ant-progress-text {
+  font-weight: bold;
+}
+
+@media (max-width: 768px) {
+  .campaign-card {
+    margin-bottom: 12px;
+  }
+  
+  .site-layout-content {
+    margin: 16px 8px;
+    padding: 16px;
+  }
+  
+  .ant-row {
+    margin-left: -8px !important;
+    margin-right: -8px !important;
+  }
+  
+  .ant-col {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+}
+
+.analytics-section {
+  margin-bottom: 32px;
+}

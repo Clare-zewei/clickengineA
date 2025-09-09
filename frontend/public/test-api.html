@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Click Engine API Test</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
+        }
+        .test-result { 
+            background: #f5f5f5; 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 4px; 
+        }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        button { 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            margin: 5px; 
+        }
+    </style>
+</head>
+<body>
+    <h1>Click Engine API 连接测试</h1>
+    
+    <div>
+        <button onclick="testAPI('/api/v1/health')">测试健康检查</button>
+        <button onclick="testAPI('/api/v1/campaigns')">测试活动API</button>
+        <button onclick="testAPI('/api/v1/channels')">测试渠道API</button>
+        <button onclick="clearResults()">清除结果</button>
+    </div>
+    
+    <div id="results"></div>
+    
+    <script>
+        const resultsDiv = document.getElementById('results');
+        
+        async function testAPI(endpoint) {
+            const startTime = Date.now();
+            const result = document.createElement('div');
+            result.className = 'test-result';
+            
+            try {
+                console.log(`Testing: ${window.location.origin}${endpoint}`);
+                const response = await fetch(endpoint);
+                const endTime = Date.now();
+                const data = await response.text();
+                
+                result.className += response.ok ? ' success' : ' error';
+                result.innerHTML = `
+                    <strong>${endpoint}</strong> 
+                    (${endTime - startTime}ms)<br>
+                    Status: ${response.status} ${response.statusText}<br>
+                    Response: ${data.substring(0, 200)}${data.length > 200 ? '...' : ''}
+                `;
+            } catch (error) {
+                result.className += ' error';
+                result.innerHTML = `
+                    <strong>${endpoint}</strong><br>
+                    Error: ${error.message}
+                `;
+            }
+            
+            resultsDiv.appendChild(result);
+        }
+        
+        function clearResults() {
+            resultsDiv.innerHTML = '';
+        }
+        
+        // 页面加载时自动测试
+        window.onload = function() {
+            console.log('Current URL:', window.location.href);
+            console.log('Testing API endpoints...');
+        };
+    </script>
+</body>
+</html>
