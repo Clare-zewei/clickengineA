@@ -47,7 +47,7 @@ interface Channel {
   totalRevenue?: number;
   paidUsers?: number;
   conversionToPaid?: number;
-  ltvCacRatio?: number;
+  cac?: number; // Customer Acquisition Cost
   channelROI?: number;
 }
 
@@ -89,13 +89,17 @@ const Channels: React.FC = () => {
       // Merge channels with revenue data
       const enhancedChannels = channelsData.map((channel: Channel) => {
         const revenueInfo = revenueData.find((r: ChannelRevenueData) => r.id === channel.id);
+        const totalSpent = channel.total_investment || 0;
+        const paidUsers = revenueInfo?.paidUsers || 0;
+        const cac = paidUsers > 0 ? totalSpent / paidUsers : null;
+        
         return {
           ...channel,
           monthlyRevenue: revenueInfo?.monthlyRevenue || 0,
           totalRevenue: revenueInfo?.totalRevenue || 0,
-          paidUsers: revenueInfo?.paidUsers || 0,
+          paidUsers: paidUsers,
           conversionToPaid: revenueInfo?.conversionToPaid || 0,
-          ltvCacRatio: revenueInfo?.ltvCacRatio || 0,
+          cac: cac,
           channelROI: revenueInfo?.channelROI || 0
         };
       });
@@ -259,23 +263,30 @@ const Channels: React.FC = () => {
       sorter: (a: Channel, b: Channel) => (a.paidUsers || 0) - (b.paidUsers || 0),
     },
     {
-      title: 'LTV/CAC Ratio',
-      key: 'ltvCacRatio',
+      title: 'CAC',
+      key: 'cac',
       render: (_: unknown, record: Channel) => {
-        const ratio = record.ltvCacRatio || 0;
-        const color = ratio >= 3 ? '#52c41a' : ratio >= 2 ? '#faad14' : '#ff4d4f';
+        const cac = record.cac;
+        if (cac === null || cac === undefined) {
+          return (
+            <div style={{ textAlign: 'center', color: '#999' }}>
+              --
+            </div>
+          );
+        }
+        const color = cac < 50 ? '#52c41a' : cac < 100 ? '#faad14' : '#ff4d4f';
         return (
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontWeight: 'bold', color }}>
-              {ratio.toFixed(1)}x
+              ${cac.toFixed(2)}
             </div>
-            <div style={{ fontSize: '10px', color: ratio >= 3 ? '#52c41a' : '#999' }}>
-              {ratio >= 3 ? 'Healthy' : ratio >= 2 ? 'Fair' : 'Poor'}
+            <div style={{ fontSize: '10px', color }}>
+              {cac < 50 ? 'Excellent' : cac < 100 ? 'Good' : 'High'}
             </div>
           </div>
         );
       },
-      sorter: (a: Channel, b: Channel) => (a.ltvCacRatio || 0) - (b.ltvCacRatio || 0),
+      sorter: (a: Channel, b: Channel) => (a.cac || 0) - (b.cac || 0),
     },
     {
       title: 'Channel ROI',

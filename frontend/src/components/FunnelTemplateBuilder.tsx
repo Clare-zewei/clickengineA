@@ -22,8 +22,11 @@ import {
   DeleteOutlined,
   WarningOutlined,
   InfoCircleOutlined,
-  DollarCircleOutlined,
-  TrophyOutlined
+  TrophyOutlined,
+  ClockCircleOutlined,
+  BarChartOutlined,
+  CheckCircleOutlined,
+  ArrowRightOutlined
 } from '@ant-design/icons';
 import { FunnelTemplate, GA4Event, CustomEvent, FunnelTemplateStep } from '../services/mockData';
 import { mockDataService, validateFunnelTemplate, calculateTotalConversion, identifyDropOffPoints } from '../services/mockData';
@@ -132,24 +135,31 @@ const FunnelTemplateBuilder: React.FC<FunnelTemplateBuilderProps> = ({
     // Calculate overall conversion rate using target rates
     const totalConversion = calculateTotalConversion(steps, false);
 
-    // Estimate CAC based on step count and complexity
+    // Calculate funnel complexity
     const complexity = steps.length + steps.filter(s => s.event.isCustom).length * 0.5;
-    const baseCost = 50;
-    const estimatedCAC = Math.round(baseCost * complexity);
-
-    // Estimate ROI (simplified calculation)
-    const avgRevenuePerCustomer = 300; // Assumption
-    const estimatedROI = avgRevenuePerCustomer / estimatedCAC;
-
+    
+    // Determine funnel type based on steps
+    const funnelType = steps.length === 1 ? 'Single Action' :
+                      steps.length === 2 ? 'Direct Conversion' :
+                      steps.some(s => s.event.stage === 'trial') ? 'Trial-to-Paid' : 'Content Marketing';
+    
+    // Estimate journey time based on complexity
+    const estimatedJourneyTime = steps.length <= 2 ? '< 5 minutes' :
+                                steps.length <= 4 ? '10-30 minutes' : '1+ hours';
+    
     // Find drop-off points (steps with <30% conversion)
     const dropOffPoints = identifyDropOffPoints(steps, 30);
+    
+    // Calculate step-by-step retention rates
+    const stepRetentionRates = steps.map(step => step.targetConversionRate || 0);
 
     setPreviewData({
       totalConversion,
-      estimatedCAC,
-      estimatedROI,
+      funnelType,
+      estimatedJourneyTime,
       dropOffPoints,
-      complexity: complexity.toFixed(1)
+      complexity: complexity.toFixed(1),
+      stepRetentionRates
     });
   };
 
@@ -211,8 +221,9 @@ const FunnelTemplateBuilder: React.FC<FunnelTemplateBuilderProps> = ({
         ...values,
         steps,
         targetTotalConversion: previewData?.totalConversion || 0,
-        estimatedCAC: previewData?.estimatedCAC || 0,
-        estimatedROI: previewData?.estimatedROI || 0,
+        funnelType: previewData?.funnelType || 'Unknown',
+        estimatedJourneyTime: previewData?.estimatedJourneyTime || 'Unknown',
+        complexity: previewData?.complexity || '1.0',
         isActive: values.isActive ?? true
       };
 
@@ -281,7 +292,7 @@ const FunnelTemplateBuilder: React.FC<FunnelTemplateBuilderProps> = ({
                 </Col>
                 <Col span={6}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div style={{ fontSize: 11, color: '#666' }}>Target Rate:</div>
+                    <div style={{ fontSize: 11, color: '#666' }}>Step Completion Goal:</div>
                     <Input
                       type="number"
                       min={0}
@@ -292,7 +303,7 @@ const FunnelTemplateBuilder: React.FC<FunnelTemplateBuilderProps> = ({
                       onChange={(e) => updateStep(step.id, { 
                         targetConversionRate: parseFloat(e.target.value) || 0 
                       })}
-                      placeholder="Target %"
+                      placeholder="Goal %"
                     />
                     {step.actualConversionRate !== undefined && (
                       <div style={{ fontSize: 11, color: '#666' }}>
@@ -365,59 +376,103 @@ const FunnelTemplateBuilder: React.FC<FunnelTemplateBuilderProps> = ({
       <Card 
         title={
           <Space>
-            <TrophyOutlined />
+            <BarChartOutlined />
             Funnel Template Preview
           </Space>
         } 
         style={{ marginTop: 16 }}
       >
-        <Row gutter={16}>
-          <Col span={8}>
-            <Card size="small">
-              <Statistic
-                title="Target Conversion"
-                value={previewData.totalConversion}
-                precision={2}
-                suffix="%"
-                valueStyle={{ color: previewData.totalConversion > 5 ? '#52c41a' : '#faad14' }}
-              />
-              {steps.some(step => step.actualConversionRate !== undefined) && (
-                <div style={{ marginTop: 8, fontSize: 12 }}>
-                  <Text type="secondary">Actual Performance:</Text>
-                  <br />
-                  <Text strong style={{ color: '#1890ff' }}>
-                    {calculateTotalConversion(steps, true).toFixed(2)}%
-                  </Text>
+        {/* Funnel Performance Expectations */}
+        <div style={{ marginBottom: 16 }}>
+          <Text strong style={{ fontSize: '14px', color: '#666', display: 'block', marginBottom: 12 }}>Funnel Performance Expectations</Text>
+          <Row gutter={16}>
+            <Col span={6}>
+              <Card size="small" style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 20, fontWeight: 'bold', color: '#1890ff', marginBottom: 4 }}>
+                  {previewData.totalConversion.toFixed(1)}%
                 </div>
-              )}
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card size="small">
-              <Statistic
-                title="Estimated CAC"
-                value={previewData.estimatedCAC}
-                prefix="$"
-                valueStyle={{ color: previewData.estimatedCAC < 100 ? '#52c41a' : '#faad14' }}
-              />
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card size="small">
-              <Statistic
-                title="Estimated ROI"
-                value={previewData.estimatedROI}
-                precision={1}
-                suffix="x"
-                valueStyle={{ color: previewData.estimatedROI > 3 ? '#52c41a' : '#faad14' }}
-              />
-            </Card>
-          </Col>
-        </Row>
+                <div style={{ fontSize: 12, color: '#666' }}>Expected Overall Conversion Rate</div>
+                <Text type="secondary" style={{ fontSize: 10 }}>
+                  (Users completing entire funnel)
+                </Text>
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card size="small" style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 'bold', color: previewData.complexity <= 2 ? '#52c41a' : previewData.complexity <= 4 ? '#faad14' : '#ff4d4f', marginBottom: 4 }}>
+                  {previewData.complexity <= 2 ? 'Simple' : previewData.complexity <= 4 ? 'Medium' : 'Complex'}
+                </div>
+                <div style={{ fontSize: 12, color: '#666' }}>Funnel Complexity</div>
+                <Text type="secondary" style={{ fontSize: 10 }}>
+                  ({steps.length} {steps.length === 1 ? 'step' : 'steps'})
+                </Text>
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card size="small" style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 'bold', color: '#fa541c', marginBottom: 4 }}>
+                  <ClockCircleOutlined style={{ marginRight: 4 }} />
+                  {previewData.estimatedJourneyTime}
+                </div>
+                <div style={{ fontSize: 12, color: '#666' }}>Est. Journey Time</div>
+                <Text type="secondary" style={{ fontSize: 10 }}>
+                  Entry to conversion
+                </Text>
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card size="small" style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 'bold', color: '#722ed1', marginBottom: 4 }}>
+                  {previewData.funnelType}
+                </div>
+                <div style={{ fontSize: 12, color: '#666' }}>Template Type</div>
+                <Text type="secondary" style={{ fontSize: 10 }}>
+                  Classification
+                </Text>
+              </Card>
+            </Col>
+          </Row>
+        </div>
 
         <Divider />
 
-        {/* Performance Comparison Section */}
+        {/* User Journey Flow */}
+        <div style={{ marginBottom: 16 }}>
+          <Text strong style={{ fontSize: '14px', color: '#666', display: 'block', marginBottom: 8 }}>User Journey Flow</Text>
+          <div style={{ 
+            background: 'linear-gradient(90deg, #f6ffed 0%, #ffffff 100%)',
+            border: '1px solid #d9f7be',
+            borderRadius: 6,
+            padding: '12px 16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <CheckCircleOutlined style={{ color: '#52c41a', marginRight: 8 }} />
+              <Text strong>Entry Point</Text>
+              <ArrowRightOutlined style={{ margin: '0 12px', color: '#1890ff' }} />
+              <Text>{steps.map(s => s.event.name).join(' → ')}</Text>
+              <ArrowRightOutlined style={{ margin: '0 12px', color: '#1890ff' }} />
+              <Text strong style={{ color: '#52c41a' }}>Conversion</Text>
+            </div>
+            
+            {steps.length > 1 && (
+              <div style={{ fontSize: 12, color: '#666' }}>
+                <Text>Step-by-step retention: </Text>
+                {previewData.stepRetentionRates.map((rate: number, index: number) => (
+                  <span key={index}>
+                    <Text style={{ color: rate >= 50 ? '#52c41a' : rate >= 30 ? '#faad14' : '#ff4d4f' }}>
+                      {rate.toFixed(1)}%
+                    </Text>
+                    {index < previewData.stepRetentionRates.length - 1 && (
+                      <ArrowRightOutlined style={{ margin: '0 6px', fontSize: 10 }} />
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Performance Analysis - Only show if actual data exists */}
         {steps.some(step => step.actualConversionRate !== undefined) && (
           <>
             <Alert
@@ -436,7 +491,7 @@ const FunnelTemplateBuilder: React.FC<FunnelTemplateBuilderProps> = ({
                     return (
                       <div key={step.id} style={{ marginBottom: 4 }}>
                         <Text strong>{step.event.name}:</Text>{' '}
-                        <Text>Target {targetRate}%</Text>{' → '}
+                        <Text>Expected {targetRate}%</Text>{' → '}
                         <Text style={{ color: isPositive ? '#52c41a' : '#ff4d4f' }}>
                           Actual {actualRate}% ({isPositive ? '+' : ''}{variance}%)
                         </Text>
@@ -450,25 +505,8 @@ const FunnelTemplateBuilder: React.FC<FunnelTemplateBuilderProps> = ({
           </>
         )}
 
+        {/* Optimization Recommendations */}
         <Space direction="vertical" style={{ width: '100%' }}>
-          <div>
-            <Text strong>Business Flow: </Text>
-            <Text>{steps.map(s => s.event.name).join(' → ')}</Text>
-          </div>
-          
-          <div>
-            <Text strong>Template Type: </Text>
-            <Text>
-              {steps.length === 2 ? 'Direct Conversion' : 
-               steps.some(s => s.event.stage === 'trial') ? 'Trial-to-Paid' : 'Content Marketing'}
-            </Text>
-          </div>
-
-          <div>
-            <Text strong>Total Steps: </Text>
-            <Text>{steps.length} steps (Complexity: {previewData.complexity})</Text>
-          </div>
-
           {previewData.dropOffPoints.length > 0 && (
             <Alert
               type="warning"
@@ -476,11 +514,11 @@ const FunnelTemplateBuilder: React.FC<FunnelTemplateBuilderProps> = ({
               message="Potential Drop-off Points Detected"
               description={
                 <div>
-                  <Text>The following steps have low conversion rates and may need optimization:</Text>
+                  <Text>The following steps have low completion goals and may need optimization:</Text>
                   <ul style={{ margin: '8px 0 0 0' }}>
                     {previewData.dropOffPoints.map((step: FunnelTemplateStep) => (
                       <li key={step.id}>
-                        <Text strong>{step.event.name}</Text>: {step.targetConversionRate || 0}% conversion
+                        <Text strong>{step.event.name}</Text>: {step.targetConversionRate || 0}% completion goal
                       </li>
                     ))}
                   </ul>
@@ -492,13 +530,13 @@ const FunnelTemplateBuilder: React.FC<FunnelTemplateBuilderProps> = ({
           <Alert
             type="info"
             showIcon
-            message="Optimization Suggestions"
+            message="Template Design Recommendations"
             description={
               <ul style={{ margin: '8px 0 0 0' }}>
-                <li>Consider simplifying steps with conversion rates below 30%</li>
-                <li>Add compelling incentives at major drop-off points</li>
-                <li>Test different messaging and calls-to-action</li>
-                <li>Consider A/B testing this template against alternatives</li>
+                <li>Set realistic step completion goals based on industry benchmarks</li>
+                <li>Consider user motivation and friction at each step</li>
+                <li>Simple funnels (1-2 steps) typically perform better than complex ones</li>
+                <li>Test your funnel assumptions with A/B testing once implemented</li>
               </ul>
             }
           />

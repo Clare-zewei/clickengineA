@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Typography, 
-  Row, 
-  Col, 
   Button, 
   Space, 
   Spin, 
@@ -11,23 +9,40 @@ import {
   Select,
   Modal,
   message,
-  Empty
+  Table,
+  Tag,
+  Progress,
+  Dropdown,
+  Menu,
+  Tooltip
 } from 'antd';
 import { 
   PlusOutlined, 
   SearchOutlined, 
   FilterOutlined,
-  AppstoreOutlined,
-  UnorderedListOutlined 
+  EditOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  MoreOutlined,
+  CalendarOutlined,
+  DollarOutlined
 } from '@ant-design/icons';
 import { api } from '../services/api';
 import { CampaignSummary, MarketingChannel, CampaignGoal } from '../types';
-import CampaignCard from '../components/CampaignCard';
+import { ColumnsType } from 'antd/es/table';
+// import CampaignCard from '../components/CampaignCard'; // No longer needed for table layout
 import CampaignForm from '../components/CampaignForm';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
 const { Option } = Select;
+
+// Interface for processed campaign data with calculated fields
+interface ProcessedCampaign extends CampaignSummary {
+  cac: number | null;
+  budget_utilization_percent: number;
+  channel_type: string;
+}
 
 const Campaigns: React.FC = () => {
   const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
@@ -37,7 +52,7 @@ const Campaigns: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<CampaignSummary | null>(null);
-  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  // Removed viewMode - now using table layout exclusively
   const [submitLoading, setSubmitLoading] = useState(false);
   
   // Filter states
@@ -65,7 +80,13 @@ const Campaigns: React.FC = () => {
         api.campaigns.getGoals()
       ]);
       
-      setCampaigns(campaignResponse.data.data || []);
+      // Add mock paid_users data for CAC calculation
+      const campaignsWithMockData = (campaignResponse.data.data || []).map((campaign: CampaignSummary) => ({
+        ...campaign,
+        paid_users: Math.floor(Math.random() * 50) + 5, // Mock 5-55 paid users
+        total_spend: campaign.actual_ad_spend || campaign.budget || Math.floor(Math.random() * 10000) + 1000
+      }));
+      setCampaigns(campaignsWithMockData);
       setChannels(channelResponse.data.data || []);
       setGoals(goalsResponse.data.data || []);
     } catch (err: any) {
@@ -84,7 +105,13 @@ const Campaigns: React.FC = () => {
       if (selectedStatus) params.status = selectedStatus;
       
       const response = await api.campaigns.getAll(params);
-      setCampaigns(response.data.data || []);
+      // Add mock paid_users data for CAC calculation
+      const campaignsWithMockData = (response.data.data || []).map((campaign: CampaignSummary) => ({
+        ...campaign,
+        paid_users: Math.floor(Math.random() * 50) + 5, // Mock 5-55 paid users
+        total_spend: campaign.actual_ad_spend || campaign.budget || Math.floor(Math.random() * 10000) + 1000
+      }));
+      setCampaigns(campaignsWithMockData);
     } catch (err: any) {
       console.error('Failed to fetch campaigns:', err);
     }
@@ -149,58 +176,195 @@ const Campaigns: React.FC = () => {
     setSelectedStatus(undefined);
   };
 
+  // Helper function to calculate CAC
+  const calculateCAC = (campaign: CampaignSummary): number | null => {
+    const totalSpend = campaign.total_spend || campaign.actual_ad_spend || 0;
+    const paidUsers = campaign.paid_users || 0;
+    
+    if (paidUsers === 0) {
+      return null; // Return null when no paid users (will display "--")
+    }
+    
+    return totalSpend / paidUsers;
+  };
+
+  // Process campaigns with CAC calculation
+  const processedCampaigns: ProcessedCampaign[] = campaigns.map(campaign => ({
+    ...campaign,
+    cac: calculateCAC(campaign),
+    budget_utilization_percent: campaign.budget_utilization_percent || 
+      (campaign.budget && campaign.total_spend ? (campaign.total_spend / campaign.budget) * 100 : 0),
+    channel_type: channels.find(c => c.id === campaign.channel_id)?.type || 'Unknown'
+  }));
+
+  // Table columns definition
+  const columns: ColumnsType<ProcessedCampaign> = [
+    {
+      title: 'Campaign Name',
+      dataIndex: 'name',
+      key: 'name',
+      sorter: (a: ProcessedCampaign, b: ProcessedCampaign) => a.name.localeCompare(b.name),
+      render: (text: string, record: ProcessedCampaign) => (
+        <div>
+          <div style={{ fontWeight: 500, marginBottom: 4 }}>{text}</div>
+          <Tag color={record.status === 'active' ? 'green' : record.status === 'paused' ? 'orange' : 'default'}>
+            {record.status?.toUpperCase()}
+          </Tag>
+        </div>
+      ),
+    },
+    {
+      title: 'Channel Type',
+      dataIndex: 'channel_type',
+      key: 'channel_type',
+      filters: Array.from(new Set(channels.map(c => c.type))).map(type => ({ text: type, value: type })),
+      onFilter: (value: any, record: ProcessedCampaign) => record.channel_type === value,
+      render: (text: string) => <Tag>{text}</Tag>,
+    },
+    {
+      title: 'Budget',
+      dataIndex: 'budget',
+      key: 'budget',
+      sorter: (a: ProcessedCampaign, b: ProcessedCampaign) => (a.budget || 0) - (b.budget || 0),
+      render: (budget: number) => budget ? `$${budget.toLocaleString()}` : '--',
+    },
+    {
+      title: 'Actual Spend',
+      dataIndex: 'total_spend',
+      key: 'total_spend',
+      sorter: (a: ProcessedCampaign, b: ProcessedCampaign) => (a.total_spend || 0) - (b.total_spend || 0),
+      render: (spend: number) => spend ? `$${spend.toLocaleString()}` : '$0',
+    },
+    {
+      title: 'Budget Utilization',
+      dataIndex: 'budget_utilization_percent',
+      key: 'budget_utilization_percent',
+      sorter: (a: ProcessedCampaign, b: ProcessedCampaign) => (a.budget_utilization_percent || 0) - (b.budget_utilization_percent || 0),
+      render: (percent: number) => (
+        <div>
+          <Progress 
+            percent={Math.min(percent, 100)} 
+            size="small"
+            status={percent > 90 ? 'exception' : percent > 70 ? 'active' : 'normal'}
+          />
+          <div style={{ fontSize: '12px', textAlign: 'center' }}>
+            {percent.toFixed(1)}%
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'CAC',
+      dataIndex: 'cac',
+      key: 'cac',
+      sorter: (a: ProcessedCampaign, b: ProcessedCampaign) => (a.cac || 0) - (b.cac || 0),
+      render: (cac: number | null) => {
+        if (cac === null) return '--';
+        const color = cac < 50 ? '#52c41a' : cac < 100 ? '#faad14' : '#ff4d4f';
+        return <span style={{ color }}>${cac.toFixed(2)}</span>;
+      },
+    },
+    {
+      title: 'Campaign Period',
+      dataIndex: 'start_date',
+      key: 'campaign_period',
+      sorter: (a: ProcessedCampaign, b: ProcessedCampaign) => {
+        const dateA = new Date(a.start_date || a.created_at);
+        const dateB = new Date(b.start_date || b.created_at);
+        return dateB.getTime() - dateA.getTime(); // Latest first (descending)
+      },
+      defaultSortOrder: 'descend' as const,
+      render: (startDate: string, record: ProcessedCampaign) => {
+        const start = new Date(startDate || record.created_at);
+        const end = record.end_date ? new Date(record.end_date) : null;
+        
+        return (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <CalendarOutlined style={{ fontSize: 12 }} />
+              <span style={{ fontSize: 12 }}>
+                {start.toLocaleDateString()}
+              </span>
+            </div>
+            {end && (
+              <div style={{ fontSize: 11, color: '#666' }}>
+                to {end.toLocaleDateString()}
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 120,
+      render: (text: any, record: ProcessedCampaign) => {
+        const actionMenu = (
+          <Menu>
+            <Menu.Item key="view" icon={<EyeOutlined />}>
+              <a href={`/campaigns/${record.id}`}>View Details</a>
+            </Menu.Item>
+            <Menu.Item key="edit" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              Edit
+            </Menu.Item>
+            <Menu.Item key="delete" icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} danger>
+              Delete
+            </Menu.Item>
+          </Menu>
+        );
+
+        return (
+          <Dropdown overlay={actionMenu} placement="bottomRight">
+            <Button type="text" icon={<MoreOutlined />} />
+          </Dropdown>
+        );
+      },
+    },
+  ];
+
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '50px auto' }} />;
   if (error) return <Alert message="Error" description={error} type="error" showIcon />;
 
   return (
     <div>
       {/* Header */}
-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
-        <Col>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <div>
           <Title level={2} style={{ margin: 0 }}>
             Marketing Campaigns
           </Title>
           <Text type="secondary">
             Manage and track your marketing campaign performance
           </Text>
-        </Col>
-        <Col>
-          <Space>
-            <Button 
-              icon={viewMode === 'card' ? <UnorderedListOutlined /> : <AppstoreOutlined />}
-              onClick={() => setViewMode(viewMode === 'card' ? 'list' : 'card')}
-            >
-              {viewMode === 'card' ? 'List View' : 'Card View'}
-            </Button>
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              New Campaign
-            </Button>
-          </Space>
-        </Col>
-      </Row>
+        </div>
+        <div>
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+          >
+            New Campaign
+          </Button>
+        </div>
+      </div>
 
       {/* Filters */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={12} md={8} lg={6}>
+      <div style={{ marginBottom: 16 }}>
+        <Space wrap>
           <Search
             placeholder="Search campaigns..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             allowClear
-            style={{ width: '100%' }}
+            style={{ width: 250 }}
           />
-        </Col>
-        <Col xs={24} sm={12} md={8} lg={6}>
           <Select
             placeholder="Filter by Channel"
             value={selectedChannel}
             onChange={setSelectedChannel}
             allowClear
-            style={{ width: '100%' }}
+            style={{ width: 180 }}
           >
             {channels.map(channel => (
               <Option key={channel.id} value={channel.id}>
@@ -208,76 +372,60 @@ const Campaigns: React.FC = () => {
               </Option>
             ))}
           </Select>
-        </Col>
-        <Col xs={24} sm={12} md={8} lg={6}>
-          <Select
-            placeholder="Filter by Goal"
-            value={selectedGoal}
-            onChange={setSelectedGoal}
-            allowClear
-            style={{ width: '100%' }}
-          >
-            {goals.map(goal => (
-              <Option key={goal.name} value={goal.name}>
-                {goal.name.charAt(0).toUpperCase() + goal.name.slice(1)}
-              </Option>
-            ))}
-          </Select>
-        </Col>
-        <Col xs={24} sm={12} md={8} lg={6}>
           <Select
             placeholder="Filter by Status"
             value={selectedStatus}
             onChange={setSelectedStatus}
             allowClear
-            style={{ width: '100%' }}
+            style={{ width: 150 }}
           >
             <Option value="active">Active</Option>
             <Option value="paused">Paused</Option>
             <Option value="completed">Completed</Option>
           </Select>
-        </Col>
-      </Row>
-
-      {/* Clear Filters */}
-      {(searchTerm || selectedChannel || selectedGoal || selectedStatus) && (
-        <Row style={{ marginBottom: 16 }}>
-          <Col>
+          {(searchTerm || selectedChannel || selectedGoal || selectedStatus) && (
             <Button onClick={clearFilters} size="small">
-              Clear All Filters
+              Clear Filters
             </Button>
-          </Col>
-        </Row>
-      )}
+          )}
+        </Space>
+      </div>
 
-      {/* Campaign Display */}
-      {campaigns.length === 0 ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={
-            <span>
-              No campaigns found. <br />
-              Create your first marketing campaign to get started.
-            </span>
-          }
-        >
-          <Button type="primary" onClick={handleCreate}>
-            Create Campaign
-          </Button>
-        </Empty>
-      ) : (
-        <Row gutter={[16, 16]}>
-          {campaigns.map((campaign) => (
-            <Col xs={24} sm={24} md={12} lg={8} xl={8} key={campaign.id}>
-              <CampaignCard
-                campaign={campaign}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
-            </Col>
-          ))}
-        </Row>
-      )}
+      {/* Campaign Table */}
+      <Table
+        columns={columns}
+        dataSource={processedCampaigns.filter(campaign => {
+          const matchesSearch = !searchTerm || 
+            campaign.name.toLowerCase().includes(searchTerm.toLowerCase());
+          const matchesChannel = !selectedChannel || 
+            campaign.channel_id === selectedChannel;
+          const matchesStatus = !selectedStatus || 
+            campaign.status === selectedStatus;
+          
+          return matchesSearch && matchesChannel && matchesStatus;
+        })}
+        rowKey="id"
+        pagination={{
+          pageSize: 20,
+          showSizeChanger: true,
+          showQuickJumper: true,
+          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} campaigns`,
+        }}
+        scroll={{ x: 1200 }}
+        locale={{
+          emptyText: (
+            <div style={{ textAlign: 'center', padding: '50px 20px' }}>
+              <div style={{ fontSize: '16px', marginBottom: '8px' }}>No campaigns found</div>
+              <div style={{ color: '#666', marginBottom: '16px' }}>
+                Create your first marketing campaign to get started.
+              </div>
+              <Button type="primary" onClick={handleCreate}>
+                Create Campaign
+              </Button>
+            </div>
+          )
+        }}
+      />
 
       {/* Campaign Form Modal */}
       <CampaignForm

@@ -1,14 +1,18 @@
 import React from 'react';
 import { Card, Space, Tag, Button, Statistic, Typography, Row, Col, Popconfirm } from 'antd';
+import { Link } from 'react-router-dom';
 import {
   EditOutlined,
   CopyOutlined,
   DeleteOutlined,
   TrophyOutlined,
   UserOutlined,
-  DollarOutlined,
   FunnelPlotOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  ClockCircleOutlined,
+  CheckCircleOutlined,
+  BarChartOutlined,
+  EyeOutlined
 } from '@ant-design/icons';
 import { FunnelTemplate } from '../services/mockData';
 
@@ -39,6 +43,25 @@ const FunnelTemplateCard: React.FC<FunnelTemplateCardProps> = ({
     }
   };
 
+  const getFunnelComplexity = (stepCount: number): { level: string; color: string } => {
+    if (stepCount <= 2) return { level: 'Simple', color: '#52c41a' };
+    if (stepCount <= 4) return { level: 'Medium', color: '#faad14' };
+    return { level: 'Complex', color: '#ff4d4f' };
+  };
+
+  const getEstimatedJourneyTime = (stepCount: number): string => {
+    if (stepCount <= 2) return '< 5 minutes';
+    if (stepCount <= 4) return '10-30 minutes';
+    return '1+ hours';
+  };
+
+  const getFunnelTypeFromSteps = (steps: any[]): string => {
+    if (steps.length === 1) return 'Single Action';
+    if (steps.length === 2) return 'Direct Conversion';
+    if (steps.some(s => s.event?.stage === 'trial')) return 'Trial-to-Paid';
+    return 'Content Marketing';
+  };
+
   const getTargetUsersLabel = (users: string): string => {
     switch (users) {
       case 'b2b_enterprise': return 'B2B Enterprises';
@@ -66,6 +89,11 @@ const FunnelTemplateCard: React.FC<FunnelTemplateCardProps> = ({
       }}
       bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column' }}
       actions={[
+        <Link to={`/funnel/${template.id}`} key="view">
+          <Button type="text" icon={<EyeOutlined />}>
+            View Details
+          </Button>
+        </Link>,
         <Button
           key="edit"
           type="text"
@@ -122,60 +150,89 @@ const FunnelTemplateCard: React.FC<FunnelTemplateCardProps> = ({
         </Space>
       </div>
 
-      <Row gutter={8} style={{ marginBottom: 12 }}>
-        <Col span={12}>
-          <div style={{ textAlign: 'center', padding: '8px 0', backgroundColor: '#fafafa', borderRadius: 4 }}>
-            <div style={{ fontSize: 18, fontWeight: 'bold', color: roiColor }}>
-              {(template.actualTotalConversion || template.targetTotalConversion || 0).toFixed(1)}%
+      {/* Funnel Performance Expectations */}
+      <div style={{ marginBottom: 12 }}>
+        <Text strong style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: 8 }}>Funnel Performance Expectations</Text>
+        <Row gutter={8}>
+          <Col span={12}>
+            <div style={{ textAlign: 'center', padding: '8px 0', backgroundColor: '#fafafa', borderRadius: 4 }}>
+              <div style={{ fontSize: 16, fontWeight: 'bold', color: '#1890ff' }}>
+                {(template.actualTotalConversion || template.targetTotalConversion || 0).toFixed(1)}%
+              </div>
+              <div style={{ fontSize: 10, color: '#666' }}>Target Conv</div>
             </div>
-            <div style={{ fontSize: 11, color: '#666' }}>Conversion</div>
-          </div>
-        </Col>
-        <Col span={12}>
-          <div style={{ textAlign: 'center', padding: '8px 0', backgroundColor: '#fafafa', borderRadius: 4 }}>
-            <div style={{ fontSize: 18, fontWeight: 'bold', color: roiColor }}>
-              {template.estimatedROI.toFixed(1)}x
+          </Col>
+          <Col span={12}>
+            <div style={{ textAlign: 'center', padding: '8px 0', backgroundColor: '#fafafa', borderRadius: 4 }}>
+              <div style={{ fontSize: 14, fontWeight: 'bold', color: getFunnelComplexity(template.steps.length).color }}>
+                {getFunnelComplexity(template.steps.length).level}
+              </div>
+              <div style={{ fontSize: 10, color: '#666' }}>Complexity</div>
             </div>
-            <div style={{ fontSize: 11, color: '#666' }}>ROI</div>
-          </div>
-        </Col>
-      </Row>
+          </Col>
+        </Row>
+      </div>
 
-      <Space direction="vertical" size={2} style={{ width: '100%', marginBottom: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Text style={{ fontSize: 12, color: '#666' }}>
-            <FunnelPlotOutlined /> {template.steps.length} steps
-          </Text>
-          <Text style={{ fontSize: 12, color: '#666' }}>
-            <DollarOutlined /> ${template.estimatedCAC} CAC
-          </Text>
+      {/* User Journey Flow */}
+      <div style={{ marginBottom: 12 }}>
+        <Text strong style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: 6 }}>User Journey Flow</Text>
+        <div style={{ 
+          fontSize: 11, 
+          color: '#1890ff', 
+          backgroundColor: '#f6ffed', 
+          padding: '6px 8px', 
+          borderRadius: 4, 
+          border: '1px solid #d9f7be',
+          marginBottom: 8
+        }}>
+          Entry → {renderFunnelFlow()} → Conversion
         </div>
         
-        {template.performanceMetrics && (
+        <Space direction="vertical" size={2} style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 12, color: '#666' }}>
-              <UserOutlined /> {template.performanceMetrics.users.toLocaleString()} users
+            <Text style={{ fontSize: 11, color: '#666' }}>
+              <ClockCircleOutlined /> {getEstimatedJourneyTime(template.steps.length)}
             </Text>
-            <Text style={{ fontSize: 12, color: '#52c41a' }}>
-              <TrophyOutlined /> {template.performanceMetrics.conversions} conversions
+            <Text style={{ fontSize: 11, color: '#666' }}>
+              <BarChartOutlined /> {getFunnelTypeFromSteps(template.steps)}
             </Text>
           </div>
-        )}
-      </Space>
+          
+          {template.performanceMetrics && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 11, color: '#666' }}>
+                <UserOutlined /> {template.performanceMetrics.users.toLocaleString()} users
+              </Text>
+              <Text style={{ fontSize: 11, color: '#52c41a' }}>
+                <CheckCircleOutlined /> {template.performanceMetrics.conversions} conversions
+              </Text>
+            </div>
+          )}
+        </Space>
+      </div>
 
       <div style={{ marginTop: 'auto' }}>
-        <Space size={4}>
-          <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>
-            {getBusinessGoalLabel(template.businessGoal)}
-          </Tag>
-          <Tag color="purple" style={{ fontSize: 10, margin: 0 }}>
-            {getTargetUsersLabel(template.targetUsers)}
-          </Tag>
-        </Space>
-        <div style={{ marginTop: 4 }}>
-          <Text style={{ fontSize: 11, color: '#999' }}>
-            Budget: {template.budgetRange}
-          </Text>
+        <div style={{ 
+          backgroundColor: '#f8f9fa', 
+          padding: '8px 10px', 
+          borderRadius: 6,
+          border: '1px solid #e8e9ea'
+        }}>
+          <div style={{ marginBottom: 6 }}>
+            <Text strong style={{ fontSize: 11, color: '#666' }}>Best Use Case:</Text>
+            <div style={{ fontSize: 11, color: '#333', marginTop: 2 }}>
+              {getBusinessGoalLabel(template.businessGoal)} campaigns
+            </div>
+          </div>
+          
+          <Space size={4} wrap>
+            <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>
+              {getTargetUsersLabel(template.targetUsers)}
+            </Tag>
+            <Tag color="green" style={{ fontSize: 10, margin: 0 }}>
+              {template.steps.length} steps
+            </Tag>
+          </Space>
         </div>
       </div>
     </Card>

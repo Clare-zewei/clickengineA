@@ -44,9 +44,13 @@ export interface Campaign {
 
 export interface CampaignSummary extends Campaign {
   budget_utilization?: string;
+  budget_utilization_percent?: number;
   total_spend?: number;
   days_remaining?: number;
   is_active?: boolean;
+  cac?: number | null; // Customer Acquisition Cost
+  paid_users?: number; // Number of paid users attributed to this campaign
+  channel_type?: string; // Channel type for display
 }
 
 export interface CampaignGoal {

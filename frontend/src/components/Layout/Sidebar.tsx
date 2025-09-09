@@ -4,8 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   DashboardOutlined,
   BulbOutlined,
-  BarChartOutlined,
-  SettingOutlined,
+  FunnelPlotOutlined,
   GlobalOutlined,
   ApiOutlined
 } from '@ant-design/icons';
@@ -38,14 +37,9 @@ const Sidebar: React.FC = () => {
       label: <Link to="/integrations">Integrations</Link>,
     },
     {
-      key: '/analytics',
-      icon: <BarChartOutlined />,
-      label: <Link to="/analytics">Analytics</Link>,
-    },
-    {
-      key: '/configuration',
-      icon: <SettingOutlined />,
-      label: <Link to="/configuration">Configuration</Link>,
+      key: '/funnel-analysis',
+      icon: <FunnelPlotOutlined />,
+      label: <Link to="/funnel-analysis">Funnel Analysis</Link>,
     },
   ];
 
@@ -80,7 +74,11 @@ const Sidebar: React.FC = () => {
       <Menu
         theme="dark"
         mode="inline"
-        selectedKeys={[currentPath === '/' ? '/dashboard' : currentPath]}
+        selectedKeys={[
+          currentPath === '/' ? '/dashboard' : 
+          currentPath.startsWith('/funnel-analysis') ? '/funnel-analysis' : 
+          currentPath
+        ]}
         items={menuItems}
       />
     </Sider>

@@ -49,5 +49,6 @@
   },
   "devDependencies": {
     "@types/jest": "^27.5.2"
-  }
+  },
+  "proxy": "http://localhost:3001"
 }

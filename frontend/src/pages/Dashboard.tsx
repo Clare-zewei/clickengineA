@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Statistic, Typography, Spin, Alert, Button, Divider } from 'antd';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Row, Col, Card, Statistic, Typography, Spin, Alert, Button, Divider, DatePicker, Select, Table } from 'antd';
 import { 
   UserOutlined, 
   EyeOutlined, 
@@ -13,15 +13,41 @@ import {
   ArrowUpOutlined,
   ArrowDownOutlined,
   FunnelPlotOutlined,
-  SettingOutlined
+  SettingOutlined,
+  LoginOutlined,
+  CrownOutlined,
+  PercentageOutlined,
+  WalletOutlined,
+  BankOutlined,
+  ShoppingCartOutlined
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { api } from '../services/api';
 import { DashboardStats } from '../types';
 import { mockDataService, RevenueMetrics, FunnelTemplate, formatCurrency, formatChange } from '../services/mockData';
 
 const { Title } = Typography;
+const { RangePicker } = DatePicker;
+const { Option } = Select;
+
+// Define time range options
+const TIME_RANGES = {
+  ALL_TIME: 'all_time',
+  THIS_MONTH: 'this_month', 
+  LAST_30_DAYS: 'last_30_days',
+  LAST_90_DAYS: 'last_90_days',
+  CUSTOM: 'custom'
+};
+
+interface NewDashboardMetrics {
+  entryUsers: number;
+  freeTrialUsers: number;
+  paidUsers: number;
+  conversionRate: number;
+  totalROI: number;
+  monthlyRevenue: number;
+  totalRevenue: number;
+  cac: number;
+}
 
 const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -31,12 +57,45 @@ const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [revenueMetrics, setRevenueMetrics] = useState<RevenueMetrics | null>(null);
   const [funnelTemplates, setFunnelTemplates] = useState<FunnelTemplate[]>([]);
+  const [newMetrics, setNewMetrics] = useState<NewDashboardMetrics | null>(null);
+  const [timeRange, setTimeRange] = useState(TIME_RANGES.THIS_MONTH);
+  const [customDateRange, setCustomDateRange] = useState<any>(null);
+
+  const fetchNewMetrics = useCallback(async () => {
+    try {
+      // Mock data for new metrics based on time range
+      // In real implementation, this would call backend API with time range parameters
+      const mockNewMetrics: NewDashboardMetrics = {
+        entryUsers: timeRange === TIME_RANGES.ALL_TIME ? 85420 : 12540, // Estimated Entry Users
+        freeTrialUsers: timeRange === TIME_RANGES.ALL_TIME ? 8542 : 1254,
+        paidUsers: timeRange === TIME_RANGES.ALL_TIME ? 3420 : 456,
+        conversionRate: 0, // Will be calculated
+        totalROI: timeRange === TIME_RANGES.ALL_TIME ? 285.5 : 125.3,
+        monthlyRevenue: 42850,
+        totalRevenue: timeRange === TIME_RANGES.ALL_TIME ? 512000 : 42850,
+        cac: 0 // Will be calculated
+      };
+
+      // Calculate derived metrics
+      mockNewMetrics.conversionRate = (mockNewMetrics.paidUsers / mockNewMetrics.entryUsers * 100);
+      mockNewMetrics.cac = mockNewMetrics.totalRevenue / mockNewMetrics.paidUsers; // Simplified CAC calculation
+
+      setNewMetrics(mockNewMetrics);
+    } catch (err: any) {
+      console.error('Failed to fetch new metrics:', err);
+    }
+  }, [timeRange]);
 
   useEffect(() => {
     fetchDashboardData();
     fetchRevenueMetrics();
     fetchFunnelTemplates();
-  }, []);
+    fetchNewMetrics();
+  }, [fetchNewMetrics]);
+
+  useEffect(() => {
+    fetchNewMetrics();
+  }, [fetchNewMetrics, timeRange, customDateRange]);
 
   const fetchDashboardData = async () => {
     try {
@@ -223,53 +282,135 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
-      <Title level={2} style={{ marginBottom: 24 }}>Dashboard</Title>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <Title level={2} style={{ margin: 0 }}>Dashboard</Title>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <span>Time Range:</span>
+          <Select 
+            value={timeRange} 
+            onChange={setTimeRange}
+            style={{ width: 150 }}
+          >
+            <Option value={TIME_RANGES.ALL_TIME}>All Time</Option>
+            <Option value={TIME_RANGES.THIS_MONTH}>This Month</Option>
+            <Option value={TIME_RANGES.LAST_30_DAYS}>Last 30 Days</Option>
+            <Option value={TIME_RANGES.LAST_90_DAYS}>Last 90 Days</Option>
+            <Option value={TIME_RANGES.CUSTOM}>Custom Range</Option>
+          </Select>
+          {timeRange === TIME_RANGES.CUSTOM && (
+            <RangePicker onChange={setCustomDateRange} />
+          )}
+        </div>
+      </div>
       
-      {/* Marketing Metrics */}
-      <Title level={4} style={{ marginBottom: 16, color: '#1890ff' }}>Marketing Metrics</Title>
-      <Row gutter={16} className="dashboard-stats" style={{ marginBottom: 32 }}>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="Total Events"
-              value={stats.totalEvents}
-              prefix={<EyeOutlined />}
-              valueStyle={{ color: '#3f8600' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="Unique Users"
-              value={stats.uniqueUsers}
-              prefix={<UserOutlined />}
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="Unique Sessions"
-              value={stats.uniqueSessions}
-              prefix={<LinkOutlined />}
-              valueStyle={{ color: '#722ed1' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="Conversion Rate"
-              value={stats.conversionRate}
-              prefix={<RiseOutlined />}
-              suffix="%"
-              valueStyle={{ color: '#cf1322' }}
-            />
-          </Card>
-        </Col>
-      </Row>
+      {/* New Dashboard Metrics - 8 Cards */}
+      <Title level={4} style={{ marginBottom: 16, color: '#1890ff' }}>Key Performance Metrics</Title>
+      {newMetrics && (
+        <>
+          <Row gutter={16} className="dashboard-stats" style={{ marginBottom: 16 }}>
+            <Col span={6}>
+              <Card>
+                <Statistic
+                  title="Entry Users"
+                  value={newMetrics.entryUsers}
+                  prefix={<LoginOutlined />}
+                  valueStyle={{ color: '#1890ff' }}
+                  formatter={(value) => (
+                    <span>
+                      {Number(value).toLocaleString()}
+                      <span style={{ fontSize: '10px', color: '#999', marginLeft: 4 }}>
+                        {timeRange !== TIME_RANGES.ALL_TIME ? '(Estimated)' : ''}
+                      </span>
+                    </span>
+                  )}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card>
+                <Statistic
+                  title="Free Trial Users"
+                  value={newMetrics.freeTrialUsers}
+                  prefix={<UserOutlined />}
+                  valueStyle={{ color: '#52c41a' }}
+                  formatter={(value) => Number(value).toLocaleString()}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card>
+                <Statistic
+                  title="Paid Users"
+                  value={newMetrics.paidUsers}
+                  prefix={<CrownOutlined />}
+                  valueStyle={{ color: '#faad14' }}
+                  formatter={(value) => Number(value).toLocaleString()}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card>
+                <Statistic
+                  title="Conversion Rate"
+                  value={newMetrics.conversionRate}
+                  prefix={<PercentageOutlined />}
+                  suffix="%"
+                  precision={2}
+                  valueStyle={{ color: '#722ed1' }}
+                />
+              </Card>
+            </Col>
+          </Row>
+          
+          <Row gutter={16} className="dashboard-stats" style={{ marginBottom: 32 }}>
+            <Col span={6}>
+              <Card>
+                <Statistic
+                  title="Total ROI"
+                  value={newMetrics.totalROI}
+                  prefix={<TrophyOutlined />}
+                  suffix="%"
+                  precision={1}
+                  valueStyle={{ color: newMetrics.totalROI > 100 ? '#52c41a' : '#faad14' }}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card>
+                <Statistic
+                  title="Monthly Revenue"
+                  value={newMetrics.monthlyRevenue}
+                  prefix={<WalletOutlined />}
+                  formatter={(value) => `$${Number(value).toLocaleString()}`}
+                  valueStyle={{ color: '#1890ff' }}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card>
+                <Statistic
+                  title={timeRange === TIME_RANGES.ALL_TIME ? 'Total Revenue' : 'Period Revenue'}
+                  value={newMetrics.totalRevenue}
+                  prefix={<BankOutlined />}
+                  formatter={(value) => `$${Number(value).toLocaleString()}`}
+                  valueStyle={{ color: '#52c41a' }}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card>
+                <Statistic
+                  title="CAC (Customer Acquisition Cost)"
+                  value={newMetrics.cac}
+                  prefix={<ShoppingCartOutlined />}
+                  formatter={(value) => `$${Number(value).toFixed(2)}`}
+                  valueStyle={{ color: newMetrics.cac < 100 ? '#52c41a' : newMetrics.cac < 200 ? '#faad14' : '#ff4d4f' }}
+                />
+              </Card>
+            </Col>
+          </Row>
+        </>
+      )}
 
       {/* Revenue Metrics */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
@@ -411,42 +552,217 @@ const Dashboard: React.FC = () => {
 
       <Divider />
 
-      {/* Charts */}
+      {/* Ranking Tables */}
       <Row gutter={16}>
         <Col span={12}>
-          <Card title="Top Campaigns" className="dashboard-chart">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={stats.topCampaigns}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="events" fill="#8884d8" />
-              </BarChart>
-            </ResponsiveContainer>
+          <Card title="Top Campaigns Ranking Table" className="dashboard-table">
+            <Table
+              dataSource={[
+                {
+                  key: '1',
+                  campaignName: 'PM Software Q4',
+                  conversionRate: 4.2,
+                  roi: 285.5,
+                  users: 4230,
+                  cac: 89.50,
+                  budgetUsage: 85.2
+                },
+                {
+                  key: '2', 
+                  campaignName: 'TeamTurbo Launch',
+                  conversionRate: 3.8,
+                  roi: 245.3,
+                  users: 3120,
+                  cac: 95.20,
+                  budgetUsage: 78.5
+                },
+                {
+                  key: '3',
+                  campaignName: 'Organic Search',
+                  conversionRate: 2.9,
+                  roi: 198.7,
+                  users: 2890,
+                  cac: 72.30,
+                  budgetUsage: 0
+                },
+                {
+                  key: '4',
+                  campaignName: 'Social Media Ads',
+                  conversionRate: 2.1,
+                  roi: 156.2,
+                  users: 1850,
+                  cac: 125.80,
+                  budgetUsage: 92.1
+                }
+              ]}
+              columns={[
+                {
+                  title: 'Campaign Name',
+                  dataIndex: 'campaignName',
+                  key: 'campaignName',
+                  render: (text: string) => <strong>{text}</strong>
+                },
+                {
+                  title: 'Conversion Rate',
+                  dataIndex: 'conversionRate',
+                  key: 'conversionRate',
+                  render: (rate: number) => `${rate}%`,
+                  sorter: (a, b) => a.conversionRate - b.conversionRate,
+                  sortOrder: 'descend',
+                  defaultSortOrder: 'descend'
+                },
+                {
+                  title: 'ROI',
+                  dataIndex: 'roi',
+                  key: 'roi',
+                  render: (roi: number) => (
+                    <span style={{ color: roi > 200 ? '#52c41a' : roi > 150 ? '#faad14' : '#ff4d4f' }}>
+                      {roi}%
+                    </span>
+                  )
+                },
+                {
+                  title: 'Users',
+                  dataIndex: 'users',
+                  key: 'users',
+                  render: (users: number) => users.toLocaleString()
+                },
+                {
+                  title: 'CAC',
+                  dataIndex: 'cac',
+                  key: 'cac',
+                  render: (cac: number) => (
+                    <span style={{ color: cac < 100 ? '#52c41a' : cac < 150 ? '#faad14' : '#ff4d4f' }}>
+                      ${cac.toFixed(2)}
+                    </span>
+                  )
+                },
+                {
+                  title: 'Budget Usage',
+                  dataIndex: 'budgetUsage',
+                  key: 'budgetUsage',
+                  render: (usage: number) => (
+                    <span>
+                      {usage === 0 ? 'Organic' : `${usage}%`}
+                    </span>
+                  )
+                }
+              ]}
+              pagination={false}
+              size="small"
+            />
           </Card>
         </Col>
         <Col span={12}>
-          <Card title="Events by Type" className="dashboard-chart">
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={stats.eventsByType}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ event_type, percent }) => `${event_type} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="count"
-                >
-                  {stats.eventsByType.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+          <Card title="Top Channels Ranking Table" className="dashboard-table">
+            <Table
+              dataSource={[
+                {
+                  key: '1',
+                  channel: 'Google Ads',
+                  conversionRate: 3.9,
+                  roi: 267.8,
+                  users: 5420,
+                  cac: 92.30,
+                  totalSpent: 15420
+                },
+                {
+                  key: '2',
+                  channel: 'Facebook Ads',
+                  conversionRate: 3.1,
+                  roi: 223.5,
+                  users: 3850,
+                  cac: 108.50,
+                  totalSpent: 12300
+                },
+                {
+                  key: '3',
+                  channel: 'LinkedIn Ads',
+                  conversionRate: 2.8,
+                  roi: 189.2,
+                  users: 2100,
+                  cac: 145.70,
+                  totalSpent: 8950
+                },
+                {
+                  key: '4',
+                  channel: 'Organic Search',
+                  conversionRate: 2.3,
+                  roi: 178.6,
+                  users: 6230,
+                  cac: 0,
+                  totalSpent: 0
+                },
+                {
+                  key: '5',
+                  channel: 'Email Marketing',
+                  conversionRate: 1.9,
+                  roi: 156.3,
+                  users: 1890,
+                  cac: 45.20,
+                  totalSpent: 2850
+                }
+              ]}
+              columns={[
+                {
+                  title: 'Channel',
+                  dataIndex: 'channel',
+                  key: 'channel',
+                  render: (text: string) => <strong>{text}</strong>
+                },
+                {
+                  title: 'Conversion Rate',
+                  dataIndex: 'conversionRate',
+                  key: 'conversionRate',
+                  render: (rate: number) => `${rate}%`,
+                  sorter: (a, b) => a.conversionRate - b.conversionRate,
+                  sortOrder: 'descend',
+                  defaultSortOrder: 'descend'
+                },
+                {
+                  title: 'ROI',
+                  dataIndex: 'roi',
+                  key: 'roi',
+                  render: (roi: number) => (
+                    <span style={{ color: roi > 200 ? '#52c41a' : roi > 150 ? '#faad14' : '#ff4d4f' }}>
+                      {roi}%
+                    </span>
+                  )
+                },
+                {
+                  title: 'Users',
+                  dataIndex: 'users',
+                  key: 'users',
+                  render: (users: number) => users.toLocaleString()
+                },
+                {
+                  title: 'CAC',
+                  dataIndex: 'cac',
+                  key: 'cac',
+                  render: (cac: number) => (
+                    <span>
+                      {cac === 0 ? 'Free' : (
+                        <span style={{ color: cac < 100 ? '#52c41a' : cac < 150 ? '#faad14' : '#ff4d4f' }}>
+                          ${cac.toFixed(2)}
+                        </span>
+                      )}
+                    </span>
+                  )
+                },
+                {
+                  title: 'Total Spent',
+                  dataIndex: 'totalSpent',
+                  key: 'totalSpent',
+                  render: (spent: number) => (
+                    <span>
+                      {spent === 0 ? 'Free' : `$${spent.toLocaleString()}`}
+                    </span>
+                  )
+                }
+              ]}
+              pagination={false}
+              size="small"
+            />
           </Card>
         </Col>
       </Row>

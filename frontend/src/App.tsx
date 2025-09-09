@@ -8,8 +8,8 @@ import Campaigns from './pages/Campaigns';
 import CampaignDetails from './pages/CampaignDetails';
 import Channels from './pages/Channels';
 import Integrations from './pages/Integrations';
-import Analytics from './pages/Analytics';
-import Configuration from './pages/Configuration';
+import FunnelAnalysis from './pages/FunnelAnalysis';
+import FunnelDetails from './pages/FunnelDetails';
 import './App.css';
 
 const { Content } = Layout;
@@ -28,8 +28,8 @@ const App: React.FC = () => {
             <Route path="/campaigns/:id" element={<CampaignDetails />} />
             <Route path="/channels" element={<Channels />} />
             <Route path="/integrations" element={<Integrations />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/configuration" element={<Configuration />} />
+            <Route path="/funnel-analysis/*" element={<FunnelAnalysis />} />
+            <Route path="/funnel/:id" element={<FunnelDetails />} />
           </Routes>
         </Content>
       </Layout>
