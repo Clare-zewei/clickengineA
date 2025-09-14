@@ -6,7 +6,9 @@ import {
   BulbOutlined,
   FunnelPlotOutlined,
   GlobalOutlined,
-  ApiOutlined
+  ApiOutlined,
+  TagsOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 
 const { Sider } = Layout;

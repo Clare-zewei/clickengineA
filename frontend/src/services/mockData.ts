@@ -139,6 +139,8 @@ export interface FunnelTemplateStep {
   lastSyncedAt?: string;
   performanceStatus?: 'success' | 'warning' | 'danger' | 'pending';
   performanceVariance?: string;
+  keywords?: string[];             // Keywords for this step
+  step_type?: string;              // Selected step type from StepConfiguration
 }
 
 export interface FunnelTemplate {

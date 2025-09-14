@@ -315,16 +315,7 @@ const Configuration: React.FC = () => {
         style={{ top: 20 }}
         destroyOnClose
       >
-        <FunnelTemplateBuilder
-          template={editingTemplate}
-          ga4Events={ga4Events}
-          customEvents={customEvents}
-          onSave={handleTemplateSaved}
-          onCancel={() => {
-            setBuilderVisible(false);
-            setEditingTemplate(null);
-          }}
-        />
+        <FunnelTemplateBuilder />
       </Modal>
     </div>
   );

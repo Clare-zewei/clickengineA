@@ -30,6 +30,7 @@ const App: React.FC = () => {
             <Route path="/integrations" element={<Integrations />} />
             <Route path="/funnel-analysis/*" element={<FunnelAnalysis />} />
             <Route path="/funnel/:id" element={<FunnelDetails />} />
+            {/* <Route path="/keywords-demo" element={<KeywordsDemo />} /> */}
           </Routes>
         </Content>
       </Layout>

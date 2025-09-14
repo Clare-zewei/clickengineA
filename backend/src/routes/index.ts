@@ -3,6 +3,7 @@ import channelsRouter from './channels';
 import campaignsRouter from './campaigns';
 import eventsRouter from './events';
 import funnelsRouter from './funnels';
+import keywordsRouter from './keywords.routes';
 
 const router = Router();
 
@@ -10,6 +11,7 @@ router.use('/channels', channelsRouter);
 router.use('/campaigns', campaignsRouter);
 router.use('/events', eventsRouter);
 router.use('/funnels', funnelsRouter);
+router.use('/keywords', keywordsRouter);
 
 router.get('/', (req, res) => {
   res.json({

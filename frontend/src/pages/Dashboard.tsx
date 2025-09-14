@@ -24,6 +24,7 @@ import {
 import { Link } from 'react-router-dom';
 import { DashboardStats } from '../types';
 import { mockDataService, RevenueMetrics, FunnelTemplate, formatCurrency, formatChange } from '../services/mockData';
+import { DASHBOARD_CONFIG, METRIC_FLAGS, LAYOUT_CONFIG } from '../config/dashboardConfig';
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -47,6 +48,10 @@ interface NewDashboardMetrics {
   monthlyRevenue: number;
   totalRevenue: number;
   cac: number;
+  // New valid metrics for pre-revenue phase
+  activeUsers: number;
+  featureUsage: number;
+  trialRetention: number;
 }
 
 const Dashboard: React.FC = () => {
@@ -73,12 +78,19 @@ const Dashboard: React.FC = () => {
         totalROI: timeRange === TIME_RANGES.ALL_TIME ? 285.5 : 125.3,
         monthlyRevenue: 42850,
         totalRevenue: timeRange === TIME_RANGES.ALL_TIME ? 512000 : 42850,
-        cac: 0 // Will be calculated
+        cac: 0, // Will be calculated
+        // Valid metrics for pre-revenue phase
+        activeUsers: timeRange === TIME_RANGES.ALL_TIME ? 7240 : 1047,
+        featureUsage: 78.5, // Percentage of users using core features
+        trialRetention: 65.2 // Percentage retention after trial period
       };
 
       // Calculate derived metrics
-      mockNewMetrics.conversionRate = (mockNewMetrics.paidUsers / mockNewMetrics.entryUsers * 100);
-      mockNewMetrics.cac = mockNewMetrics.totalRevenue / mockNewMetrics.paidUsers; // Simplified CAC calculation
+      // For pre-revenue phase, conversion rate = trial users / entry users
+      mockNewMetrics.conversionRate = (mockNewMetrics.freeTrialUsers / mockNewMetrics.entryUsers * 100);
+      // CAC calculation based on marketing spend (if any paid promotion exists)
+      const estimatedMarketingSpend = timeRange === TIME_RANGES.ALL_TIME ? 480000 : 93970;
+      mockNewMetrics.cac = estimatedMarketingSpend / mockNewMetrics.freeTrialUsers;
 
       setNewMetrics(mockNewMetrics);
     } catch (err: any) {
@@ -303,214 +315,163 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
       
-      {/* New Dashboard Metrics - 8 Cards */}
+      {/* Key Performance Metrics - Pre-Revenue Phase */}
       <Title level={4} style={{ marginBottom: 16, color: '#1890ff' }}>Key Performance Metrics</Title>
       {newMetrics && (
         <>
-          <Row gutter={16} className="dashboard-stats" style={{ marginBottom: 16 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Entry Users"
-                  value={newMetrics.entryUsers}
-                  prefix={<LoginOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                  formatter={(value) => (
-                    <span>
-                      {Number(value).toLocaleString()}
-                      <span style={{ fontSize: '10px', color: '#999', marginLeft: 4 }}>
-                        {timeRange !== TIME_RANGES.ALL_TIME ? '(Estimated)' : ''}
+          <Row gutter={16} className="dashboard-stats pre-revenue-phase" style={{ marginBottom: 16 }}>
+            {METRIC_FLAGS.ENTRY_USERS && (
+              <Col span={6}>
+                <Card>
+                  <Statistic
+                    title="Entry Users"
+                    value={newMetrics.entryUsers}
+                    prefix={<LoginOutlined />}
+                    valueStyle={{ color: '#1890ff' }}
+                    formatter={(value) => (
+                      <span>
+                        {Number(value).toLocaleString()}
+                        <span style={{ fontSize: '10px', color: '#999', marginLeft: 4 }}>
+                          {timeRange !== TIME_RANGES.ALL_TIME ? '(Estimated)' : ''}
+                        </span>
                       </span>
-                    </span>
-                  )}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Free Trial Users"
-                  value={newMetrics.freeTrialUsers}
-                  prefix={<UserOutlined />}
-                  valueStyle={{ color: '#52c41a' }}
-                  formatter={(value) => Number(value).toLocaleString()}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Paid Users"
-                  value={newMetrics.paidUsers}
-                  prefix={<CrownOutlined />}
-                  valueStyle={{ color: '#faad14' }}
-                  formatter={(value) => Number(value).toLocaleString()}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Conversion Rate"
-                  value={newMetrics.conversionRate}
-                  prefix={<PercentageOutlined />}
-                  suffix="%"
-                  precision={2}
-                  valueStyle={{ color: '#722ed1' }}
-                />
-              </Card>
-            </Col>
+                    )}
+                  />
+                </Card>
+              </Col>
+            )}
+            {METRIC_FLAGS.FREE_TRIAL_USERS && (
+              <Col span={6}>
+                <Card>
+                  <Statistic
+                    title="Free Trial Users"
+                    value={newMetrics.freeTrialUsers}
+                    prefix={<UserOutlined />}
+                    valueStyle={{ color: '#52c41a' }}
+                    formatter={(value) => Number(value).toLocaleString()}
+                  />
+                </Card>
+              </Col>
+            )}
+            {METRIC_FLAGS.CONVERSION_RATE && (
+              <Col span={6}>
+                <Card>
+                  <Statistic
+                    title="Trial Conversion Rate"
+                    value={newMetrics.conversionRate}
+                    prefix={<PercentageOutlined />}
+                    suffix="%"
+                    precision={2}
+                    valueStyle={{ color: '#722ed1' }}
+                  />
+                  <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
+                    Entry → Trial Users
+                  </div>
+                </Card>
+              </Col>
+            )}
+            {METRIC_FLAGS.CAC && (
+              <Col span={6}>
+                <Card>
+                  <Statistic
+                    title="CAC (Marketing Cost)"
+                    value={newMetrics.cac}
+                    prefix={<ShoppingCartOutlined />}
+                    formatter={(value) => `$${Number(value).toFixed(2)}`}
+                    valueStyle={{ color: newMetrics.cac < 100 ? '#52c41a' : newMetrics.cac < 200 ? '#faad14' : '#ff4d4f' }}
+                  />
+                  <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
+                    Per Trial User
+                  </div>
+                </Card>
+              </Col>
+            )}
           </Row>
           
+          {/* User Engagement Metrics */}
+          <Title level={4} style={{ marginBottom: 16, color: '#52c41a' }}>User Engagement Metrics</Title>
           <Row gutter={16} className="dashboard-stats" style={{ marginBottom: 32 }}>
             <Col span={6}>
               <Card>
                 <Statistic
-                  title="Total ROI"
-                  value={newMetrics.totalROI}
-                  prefix={<TrophyOutlined />}
+                  title="Active Trial Users"
+                  value={newMetrics.activeUsers}
+                  prefix={<TeamOutlined />}
+                  valueStyle={{ color: '#52c41a' }}
+                  formatter={(value) => Number(value).toLocaleString()}
+                />
+                <div style={{ fontSize: '11px', color: '#52c41a', marginTop: 4 }}>
+                  ↑ {Math.round(newMetrics.activeUsers * 0.08)} new this month
+                </div>
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card>
+                <Statistic
+                  title="Feature Usage Rate"
+                  value={newMetrics.featureUsage}
+                  prefix={<SettingOutlined />}
                   suffix="%"
                   precision={1}
-                  valueStyle={{ color: newMetrics.totalROI > 100 ? '#52c41a' : '#faad14' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Monthly Revenue"
-                  value={newMetrics.monthlyRevenue}
-                  prefix={<WalletOutlined />}
-                  formatter={(value) => `$${Number(value).toLocaleString()}`}
                   valueStyle={{ color: '#1890ff' }}
                 />
+                <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
+                  Core features adoption
+                </div>
               </Card>
             </Col>
             <Col span={6}>
               <Card>
                 <Statistic
-                  title={timeRange === TIME_RANGES.ALL_TIME ? 'Total Revenue' : 'Period Revenue'}
-                  value={newMetrics.totalRevenue}
-                  prefix={<BankOutlined />}
-                  formatter={(value) => `$${Number(value).toLocaleString()}`}
-                  valueStyle={{ color: '#52c41a' }}
+                  title="Trial Retention"
+                  value={newMetrics.trialRetention}
+                  prefix={<HeartOutlined />}
+                  suffix="%"
+                  precision={1}
+                  valueStyle={{ color: '#722ed1' }}
                 />
+                <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
+                  7-day retention rate
+                </div>
               </Card>
             </Col>
             <Col span={6}>
-              <Card>
+              <Card style={{ backgroundColor: '#fafafa', border: '2px dashed #d9d9d9' }}>
                 <Statistic
-                  title="CAC (Customer Acquisition Cost)"
-                  value={newMetrics.cac}
-                  prefix={<ShoppingCartOutlined />}
-                  formatter={(value) => `$${Number(value).toFixed(2)}`}
-                  valueStyle={{ color: newMetrics.cac < 100 ? '#52c41a' : newMetrics.cac < 200 ? '#faad14' : '#ff4d4f' }}
+                  title="Revenue Metrics"
+                  value="Coming Soon"
+                  prefix={<WalletOutlined />}
+                  valueStyle={{ color: '#999', fontSize: '16px' }}
                 />
+                <div style={{ fontSize: '11px', color: '#999', marginTop: 4 }}>
+                  Available after pricing launch
+                </div>
               </Card>
             </Col>
           </Row>
         </>
       )}
 
-      {/* Revenue Metrics */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0, color: '#52c41a' }}>Revenue Metrics</Title>
-        <Button 
-          type="text" 
-          icon={<ReloadOutlined />}
-          loading={revenueLoading}
-          onClick={handleRefreshRevenue}
-          style={{ marginLeft: 16 }}
-        >
-          Refresh
-        </Button>
-      </div>
-      <Row gutter={16} className="dashboard-revenue-stats" style={{ marginBottom: 32 }}>
-        {revenueMetrics ? (
-          <>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Monthly ROI"
-                  value={revenueMetrics.monthlyROI.current}
-                  precision={1}
-                  prefix={<TrophyOutlined />}
-                  suffix="%"
-                  valueStyle={{ color: revenueMetrics.monthlyROI.isPositive ? '#3f8600' : '#cf1322' }}
-                />
-                <div style={{ 
-                  fontSize: '12px', 
-                  color: revenueMetrics.monthlyROI.isPositive ? '#3f8600' : '#cf1322',
-                  marginTop: 4
-                }}>
-                  {revenueMetrics.monthlyROI.isPositive ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
-                  {formatChange(revenueMetrics.monthlyROI.change, true)} vs last month
-                </div>
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Paid Users"
-                  value={revenueMetrics.paidUsers.current}
-                  prefix={<TeamOutlined />}
-                  valueStyle={{ color: revenueMetrics.paidUsers.isPositive ? '#3f8600' : '#cf1322' }}
-                />
-                <div style={{ 
-                  fontSize: '12px', 
-                  color: revenueMetrics.paidUsers.isPositive ? '#3f8600' : '#cf1322',
-                  marginTop: 4
-                }}>
-                  {revenueMetrics.paidUsers.isPositive ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
-                  {formatChange(revenueMetrics.paidUsers.change)} new this month
-                </div>
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Monthly Revenue"
-                  value={revenueMetrics.monthlyRevenue.current}
-                  prefix={<DollarOutlined />}
-                  formatter={(value) => formatCurrency(Number(value))}
-                  valueStyle={{ color: revenueMetrics.monthlyRevenue.isPositive ? '#3f8600' : '#cf1322' }}
-                />
-                <div style={{ 
-                  fontSize: '12px', 
-                  color: revenueMetrics.monthlyRevenue.isPositive ? '#3f8600' : '#cf1322',
-                  marginTop: 4
-                }}>
-                  {revenueMetrics.monthlyRevenue.isPositive ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
-                  {formatCurrency(revenueMetrics.monthlyRevenue.change)} vs last month
-                </div>
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Average LTV"
-                  value={revenueMetrics.averageLTV.current}
-                  prefix={<HeartOutlined />}
-                  formatter={(value) => formatCurrency(Number(value))}
-                  valueStyle={{ color: revenueMetrics.averageLTV.isPositive ? '#3f8600' : '#cf1322' }}
-                />
-                <div style={{ 
-                  fontSize: '12px', 
-                  color: revenueMetrics.averageLTV.isPositive ? '#3f8600' : '#cf1322',
-                  marginTop: 4
-                }}>
-                  {revenueMetrics.averageLTV.isPositive ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
-                  {formatCurrency(revenueMetrics.averageLTV.change)} vs last month
-                </div>
-              </Card>
-            </Col>
-          </>
-        ) : (
-          <Col span={24}>
-            <Spin size="large" style={{ display: 'block', margin: '50px auto' }} />
-          </Col>
-        )}
-      </Row>
+      {/* Revenue Metrics Section - Hidden in Pre-Revenue Phase */}
+      {LAYOUT_CONFIG.showRevenueSection && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+            <Title level={4} style={{ margin: 0, color: '#52c41a' }}>Revenue Metrics</Title>
+            <Button 
+              type="text" 
+              icon={<ReloadOutlined />}
+              loading={revenueLoading}
+              onClick={handleRefreshRevenue}
+              style={{ marginLeft: 16 }}
+            >
+              Refresh
+            </Button>
+          </div>
+          <Row gutter={16} className="dashboard-revenue-stats" style={{ marginBottom: 32 }}>
+            {/* Revenue metrics content - hidden in pre-revenue phase */}
+          </Row>
+        </>
+      )}
 
       <Divider />
 
@@ -603,7 +564,7 @@ const Dashboard: React.FC = () => {
                   render: (text: string) => <strong>{text}</strong>
                 },
                 {
-                  title: 'Conversion Rate',
+                  title: 'Trial Conversion Rate',
                   dataIndex: 'conversionRate',
                   key: 'conversionRate',
                   render: (rate: number) => `${rate}%`,
@@ -611,7 +572,8 @@ const Dashboard: React.FC = () => {
                   sortOrder: 'descend',
                   defaultSortOrder: 'descend'
                 },
-                {
+                // ROI column hidden in pre-revenue phase
+                ...(METRIC_FLAGS.TOTAL_ROI ? [{
                   title: 'ROI',
                   dataIndex: 'roi',
                   key: 'roi',
@@ -620,9 +582,9 @@ const Dashboard: React.FC = () => {
                       {roi}%
                     </span>
                   )
-                },
+                }] : []),
                 {
-                  title: 'Users',
+                  title: 'Trial Users',
                   dataIndex: 'users',
                   key: 'users',
                   render: (users: number) => users.toLocaleString()
@@ -711,7 +673,7 @@ const Dashboard: React.FC = () => {
                   render: (text: string) => <strong>{text}</strong>
                 },
                 {
-                  title: 'Conversion Rate',
+                  title: 'Trial Conversion Rate',
                   dataIndex: 'conversionRate',
                   key: 'conversionRate',
                   render: (rate: number) => `${rate}%`,
@@ -719,7 +681,8 @@ const Dashboard: React.FC = () => {
                   sortOrder: 'descend',
                   defaultSortOrder: 'descend'
                 },
-                {
+                // ROI column hidden in pre-revenue phase
+                ...(METRIC_FLAGS.TOTAL_ROI ? [{
                   title: 'ROI',
                   dataIndex: 'roi',
                   key: 'roi',
@@ -728,9 +691,9 @@ const Dashboard: React.FC = () => {
                       {roi}%
                     </span>
                   )
-                },
+                }] : []),
                 {
-                  title: 'Users',
+                  title: 'Trial Users',
                   dataIndex: 'users',
                   key: 'users',
                   render: (users: number) => users.toLocaleString()
@@ -766,6 +729,7 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
     </div>
   );
 };

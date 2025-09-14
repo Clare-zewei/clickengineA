@@ -77,3 +77,63 @@
 .analytics-section {
   margin-bottom: 32px;
 }
+
+/* Pre-revenue phase dashboard styles */
+.pre-revenue-phase .dashboard-stats {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.pre-revenue-phase .revenue-metrics,
+.pre-revenue-phase .paid-user-metrics,
+.pre-revenue-phase .roi-metrics {
+  display: none;
+}
+
+/* Dashboard table adjustments for pre-revenue */
+.dashboard-table .ant-table-thead > tr > th {
+  background-color: #fafafa;
+  font-weight: 600;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.dashboard-table .ant-table-tbody > tr > td {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dashboard-table .ant-table-tbody > tr:hover > td {
+  background-color: #f5f5f5;
+}
+
+/* Coming soon placeholder styles */
+.pre-revenue-phase .coming-soon-card {
+  background: linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%);
+  border: 2px dashed #d9d9d9;
+  opacity: 0.7;
+  transition: all 0.3s ease;
+}
+
+.pre-revenue-phase .coming-soon-card:hover {
+  border-color: #1890ff;
+  opacity: 1;
+}
+
+/* Metric card enhancements */
+.dashboard-stats .ant-card {
+  transition: all 0.3s ease;
+  border-radius: 8px;
+}
+
+.dashboard-stats .ant-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+/* Valid metrics highlighting */
+.pre-revenue-phase .valid-metric {
+  border-left: 4px solid #52c41a;
+}
+
+.pre-revenue-phase .invalid-metric {
+  border-left: 4px solid #ff4d4f;
+  opacity: 0.5;
+}
