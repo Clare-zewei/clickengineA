@@ -22,12 +22,13 @@
 ClickEngine Analytics is a comprehensive marketing analytics platform that helps businesses track, analyze, and optimize their marketing campaigns and conversion funnels. The platform provides detailed insights into user behavior, campaign performance, and conversion optimization opportunities.
 
 ### Key Business Features
-- **Dashboard Analytics**: Real-time marketing performance overview
-- **Campaign Management**: Track and optimize marketing campaigns
-- **Channel Analytics**: Analyze marketing channel performance
-- **Funnel Analysis**: Detailed user journey and conversion analysis
-- **Template Builder**: Create and manage conversion funnel templates
-- **Integration Hub**: Connect with GA4 and other analytics platforms
+- **Dashboard Analytics**: Real-time marketing performance overview with 8 key metrics
+- **Campaign Management**: Track and optimize marketing campaigns with CAC analysis
+- **Channel Analytics**: Analyze marketing channel performance and ROI
+- **Advanced Funnel Analysis V2**: Multi-step wizard funnel builder with 17+ templates
+- **Step Template Library**: Pre-configured GA4 event templates by category
+- **UTM Parameter Management**: Automated campaign tracking and attribution
+- **Integration Hub**: Connect with GA4 and TeamTurbo analytics platforms
 
 ## Architecture Overview
 
@@ -88,17 +89,21 @@ clickengineA/
 │   │   │   ├── CampaignForm.tsx
 │   │   │   ├── CustomEventManager.tsx
 │   │   │   ├── FunnelTemplateBuilder.tsx
-│   │   │   └── FunnelTemplateCard.tsx
+│   │   │   ├── FunnelTemplateCard.tsx
+│   │   │   ├── KeywordsInput.tsx
+│   │   │   ├── StepConfiguration.tsx
+│   │   │   └── FunnelAnalysisV2/
+│   │   │       └── StepConfigPanel.tsx
 │   │   ├── pages/               # Main application pages
 │   │   │   ├── Dashboard.tsx
 │   │   │   ├── Campaigns.tsx
 │   │   │   ├── CampaignDetails.tsx
 │   │   │   ├── Channels.tsx
-│   │   │   ├── FunnelAnalysis.tsx
-│   │   │   ├── FunnelDetails.tsx
-│   │   │   ├── ResultsDashboard.tsx
-│   │   │   ├── FunnelBuilder.tsx
-│   │   │   └── Integrations.tsx
+│   │   │   ├── Integrations.tsx
+│   │   │   ├── FunnelAnalysisV2Router.tsx       # Funnel routing
+│   │   │   ├── FunnelAnalysisV2Dashboard.tsx    # Funnel management
+│   │   │   ├── FunnelAnalysisV2Builder.tsx      # Funnel creation/editing
+│   │   │   └── FunnelAnalysisV2Details.tsx      # Detailed funnel analysis
 │   │   ├── services/            # API and data services
 │   │   │   ├── api.ts
 │   │   │   └── mockData.ts
@@ -248,166 +253,225 @@ const cac = paidUsers > 0 ? totalSpent / paidUsers : null;
 10. Status (active/inactive)
 11. Actions (edit/copy/delete)
 
-### 4. Funnel Analysis System
+### 4. Advanced Funnel Analysis V2 System
 
-The funnel analysis system consists of three main components:
+The V2 funnel analysis system provides a comprehensive multi-step wizard approach for creating, managing, and analyzing conversion funnels with advanced features:
 
-#### 4.1 Funnel Analysis Main Page
-**File**: `src/pages/FunnelAnalysis.tsx`
+#### 4.1 Funnel Analysis V2 Router
+**File**: `src/pages/FunnelAnalysisV2Router.tsx`
 
-Navigation hub with nested routing:
+Main routing component that handles navigation between funnel dashboard, creation, and editing:
 
 ```typescript
-const FunnelAnalysis: React.FC = () => {
+const FunnelAnalysisV2Router: React.FC = () => {
   return (
-    <Layout>
-      <Sider width={200}>
-        <Menu selectedKeys={[location.pathname.split('/').pop() || 'results']}>
-          <Menu.Item key="results">
-            <Link to="/funnel-analysis/results">Results Dashboard</Link>
-          </Menu.Item>
-          <Menu.Item key="builder">
-            <Link to="/funnel-analysis/builder">Funnel Builder</Link>
-          </Menu.Item>
-        </Menu>
-      </Sider>
-      <Layout>
-        <Content>
-          <Routes>
-            <Route path="/" element={<Navigate to="results" replace />} />
-            <Route path="/results" element={<ResultsDashboard />} />
-            <Route path="/builder" element={<FunnelBuilder />} />
-          </Routes>
-        </Content>
-      </Layout>
-    </Layout>
+    <Routes>
+      <Route path="/" element={<FunnelAnalysisV2Dashboard />} />
+      <Route path="/create" element={<FunnelAnalysisV2Builder />} />
+      <Route path="/edit/:id" element={<FunnelAnalysisV2Builder />} />
+      <Route path="/details/:id" element={<FunnelAnalysisV2Details />} />
+    </Routes>
   );
 };
 ```
 
-#### 4.2 Results Dashboard
-**File**: `src/pages/ResultsDashboard.tsx`
+#### 4.2 Funnel Management Dashboard
+**File**: `src/pages/FunnelAnalysisV2Dashboard.tsx`
 
-Card-based funnel template performance overview:
+Card-based funnel management interface with performance overview:
 
 ```typescript
-interface FunnelResultCard extends FunnelTemplate {
-  averageCompletionTime: number;
-  completionTimeUnit: string;
-  stepRetentionRates: number[];
-  monthlyTrend: number;
-  performanceStatus: 'excellent' | 'good' | 'attention' | 'action';
-  statusMessage: string;
+interface FunnelV2 {
+  id: string;
+  name: string;
+  description: string;
+  targetCount: string;
+  targetPeriod: 'day' | 'week' | 'month';
+  status: 'draft' | 'testing' | 'active' | 'paused';
+  steps: FunnelStepV2[];
+  createdAt: Date;
+  updatedAt: Date;
+  performance?: {
+    totalUsers: number;
+    conversions: number;
+    conversionRate: number;
+    avgCompletionTime: string;
+  };
+}
+```
+
+**Key Features:**
+- **Funnel Cards**: Visual overview with key metrics
+- **Status Management**: Draft, testing, active, paused states
+- **Quick Actions**: Edit, clone, delete, view details
+- **Performance Indicators**: Conversion rates and user metrics
+- **Search & Filter**: Find funnels by name, status, or performance
+
+#### 4.3 Multi-Step Wizard Builder
+**File**: `src/pages/FunnelAnalysisV2Builder.tsx`
+
+Comprehensive funnel creation and editing with a 3-step wizard:
+
+```typescript
+interface FunnelStepV2 {
+  id: string;
+  name: string;
+  description: string;
+  ga4EventName: string;
+  eventParameters: string[];
+  teamTurboAction: string;
+  utmTemplate: {
+    campaign: string;
+    source: string;
+    medium: string;
+    term: string;
+    content: string;
+  };
+  adConfig?: {
+    adType?: string;
+    channel?: string;
+    creativeFormat?: string;
+    keywords?: string[];
+  };
 }
 
-// Performance Status Logic
-const getPerformanceStatus = (conversionRate: number, trend: number) => {
-  if (conversionRate >= 15 && trend >= 0) return 'excellent';
-  if (conversionRate >= 10 && trend >= -2) return 'good';
-  if (conversionRate >= 5 || trend >= -5) return 'attention';
-  return 'action';
+interface StepTemplate {
+  id: string;
+  category: 'marketing' | 'user-actions' | 'business-events' | 'engagement';
+  name: string;
+  description: string;
+  ga4EventName: string;
+  eventParameters: string[];
+  teamTurboAction: string;
+  icon: string;
+}
+```
+
+**Wizard Steps:**
+1. **Basic Information**: Name, description, targets, status
+2. **Steps Configuration**: Add/remove/reorder steps with templates
+3. **Review & Save**: Preview and final validation
+
+**Advanced Features:**
+- **17+ Pre-built Templates**: Organized by category (Marketing, User Actions, Business Events, Engagement)
+- **Drag & Drop Reordering**: Intuitive step sequence management
+- **Custom Step Configuration**: GA4 events, UTM parameters, ad tracking
+- **Real-time Form Validation**: Live input feedback with immediate visual updates
+- **Dual State Management**: Synchronizes form state with component state
+- **Copy & Clone Functionality**: Duplicate existing funnels with automatic naming
+
+**Step Template Categories:**
+- **Marketing & Ads**: Ad clicks, page views, blog engagement, social media interactions
+- **User Actions**: Sign up, login, email verification, onboarding completion
+- **Business Events**: Trial start, feature usage, pricing page views, purchases
+- **Engagement**: Content downloads, newsletter signups, webinar registrations, contact forms
+
+#### 4.4 Step Configuration System
+**File**: `src/components/StepConfiguration.tsx`
+
+Advanced step configuration with custom parameters:
+
+```typescript
+interface StepConfigProps {
+  step: FunnelStepV2;
+  onChange: (step: FunnelStepV2) => void;
+  isTemplate?: boolean;
+}
+
+const StepConfiguration: React.FC<StepConfigProps> = ({ step, onChange, isTemplate }) => {
+  // UTM Template Management
+  const updateUTMTemplate = (field: string, value: string) => {
+    onChange({
+      ...step,
+      utmTemplate: { ...step.utmTemplate, [field]: value }
+    });
+  };
+
+  // Ad Configuration for marketing steps
+  const updateAdConfig = (field: string, value: any) => {
+    onChange({
+      ...step,
+      adConfig: { ...step.adConfig, [field]: value }
+    });
+  };
 };
 ```
 
-**Key Features:**
-- **Template Cards**: Visual funnel template overview
-- **Performance Metrics**: Conversion rate, users, conversions, avg time
-- **Flow Analysis**: Step-by-step retention rates with trends
-- **Status Intelligence**: Smart performance classification
-- **Navigation**: Direct link to detailed funnel analysis
+**Configuration Options:**
+- **GA4 Event Mapping**: Custom event names and parameters
+- **UTM Parameter Templates**: Campaign tracking setup
+- **Ad Configuration**: Type, channel, creative format, keywords
+- **TeamTurbo Integration**: Action mapping for internal tracking
 
-#### 4.3 Funnel Builder
-**File**: `src/pages/FunnelBuilder.tsx` & `src/components/FunnelTemplateBuilder.tsx`
+#### 4.5 Keywords Input System
+**File**: `src/components/KeywordsInput.tsx`
 
-Professional funnel template creation and management:
+Specialized component for managing ad keywords:
 
 ```typescript
-interface FunnelTemplate {
-  id: string;
-  name: string;
-  businessGoal: 'acquisition' | 'activation' | 'upgrade' | 'retention';
-  targetUsers: string;
-  budgetRange: string;
-  description?: string;
-  steps: FunnelTemplateStep[];
-  targetTotalConversion: number;
-  funnelType: string;
-  estimatedJourneyTime: string;
-  complexity: string;
-  isActive: boolean;
+interface KeywordsInputProps {
+  value?: string[];
+  onChange?: (keywords: string[]) => void;
+  placeholder?: string;
+  maxTags?: number;
 }
 
-interface FunnelTemplateStep {
-  id: string;
-  stepNumber: number;
-  event: GA4Event;
-  targetConversionRate: number;
-  actualConversionRate?: number;
-}
+const KeywordsInput: React.FC<KeywordsInputProps> = ({ value = [], onChange, placeholder, maxTags = 20 }) => {
+  // Tag management with validation
+  const handleTagAdd = (tag: string) => {
+    if (tag && !value.includes(tag) && value.length < maxTags) {
+      onChange?.([...value, tag]);
+    }
+  };
+};
 ```
 
-**Key Features:**
-- **Template Management**: Create, edit, copy, delete templates
-- **Step Configuration**: Multi-step funnel design with GA4 events
-- **Performance Expectations**: Realistic conversion rate setting
-- **Journey Time Estimation**: Based on complexity analysis
-- **Template Categories**: Pre-configured business goal templates
-- **Validation System**: Business logic validation and recommendations
+**Features:**
+- **Dynamic Tag Management**: Add/remove keywords with validation
+- **Duplicate Prevention**: Automatic duplicate keyword filtering
+- **Limit Control**: Configurable maximum keyword count
+- **Visual Feedback**: Immediate tag display and removal
 
-**Template Creation Flow:**
-1. **Basic Information**: Name, goal, target users, budget range
-2. **Step Configuration**: Add/remove steps with GA4 event mapping
-3. **Performance Targets**: Set realistic completion goals per step
-4. **Preview & Validation**: Real-time template analysis
-5. **Save & Deploy**: Template activation and management
+#### 4.6 Detailed Funnel Analysis
+**File**: `src/pages/FunnelAnalysisV2Details.tsx`
 
-#### 4.4 Detailed Funnel Analysis
-**File**: `src/pages/FunnelDetails.tsx`
-
-Comprehensive funnel performance analysis page:
+Comprehensive funnel performance analysis and insights:
 
 ```typescript
-interface FunnelStepAnalysis {
-  stepNumber: number;
+interface StepPerformance {
+  stepId: string;
   stepName: string;
-  eventName: string;
-  ga4EventId?: string;
   users: number;
   conversionRate: number;
-  dropOffRate: number;
-  fromPrevious: number;
-  ofTotal: number;
-  cumulativeDropOff: number;
-  avgTimeToNext?: number;
+  avgTimeToNext: string | null;
+  dropOffCount: number;
   status: 'excellent' | 'good' | 'attention' | 'critical';
 }
 
-interface FunnelAnalysisData {
-  totalEntryUsers: number;
-  finalConversions: number;
-  overallConversionRate: number;
-  avgCompletionTime: number;
-  medianCompletionTime: number;
-  steps: FunnelStepAnalysis[];
-  keyBottlenecks: FunnelStepAnalysis[];
-  recommendations: RecommendationItem[];
+interface FunnelAnalysisV2Data {
+  funnelId: string;
+  overallMetrics: {
+    totalUsers: number;
+    conversions: number;
+    conversionRate: number;
+    avgCompletionTime: string;
+  };
+  stepPerformance: StepPerformance[];
+  insights: {
+    topBottleneck: string;
+    recommendations: string[];
+    trendAnalysis: string;
+  };
 }
 ```
 
-**Key Features:**
-- **Overview Metrics**: Entry users, conversions, success rate, completion time
-- **Step-by-Step Analysis**: Detailed user journey visualization
-- **Bottleneck Detection**: Automatic identification of problem areas
+**Analysis Features:**
+- **Step-by-Step Performance**: Detailed conversion metrics per step
+- **Bottleneck Identification**: Automatic problem area detection
+- **Time Analysis**: User journey timing and completion patterns
 - **Actionable Insights**: Specific optimization recommendations
-- **Time Analysis**: Completion time distribution and patterns
-- **Performance Status**: Color-coded step performance indicators
-
-**Analysis Sections:**
-1. **Overview Metrics**: High-level funnel performance KPIs
-2. **User Journey Visualization**: Step-by-step flow with drop-off points
-3. **Bottleneck Analysis**: Critical problem areas identification
-4. **Actionable Recommendations**: Specific optimization suggestions
-5. **Time Analysis**: User behavior timing patterns
+- **Trend Analysis**: Performance changes over time
+- **Visual Flow**: Interactive funnel visualization with drop-off points
 
 ### 5. Integration Hub
 

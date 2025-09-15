@@ -6,9 +6,7 @@ import {
   BulbOutlined,
   FunnelPlotOutlined,
   GlobalOutlined,
-  ApiOutlined,
-  TagsOutlined,
-  SettingOutlined
+  ApiOutlined
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -39,9 +37,9 @@ const Sidebar: React.FC = () => {
       label: <Link to="/integrations">Integrations</Link>,
     },
     {
-      key: '/funnel-analysis',
+      key: '/funnel-analysis-v2',
       icon: <FunnelPlotOutlined />,
-      label: <Link to="/funnel-analysis">Funnel Analysis</Link>,
+      label: <Link to="/funnel-analysis-v2">Funnel Analysis</Link>,
     },
   ];
 
@@ -78,7 +76,7 @@ const Sidebar: React.FC = () => {
         mode="inline"
         selectedKeys={[
           currentPath === '/' ? '/dashboard' : 
-          currentPath.startsWith('/funnel-analysis') ? '/funnel-analysis' : 
+          currentPath.startsWith('/funnel-analysis-v2') ? '/funnel-analysis-v2' :
           currentPath
         ]}
         items={menuItems}

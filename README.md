@@ -33,13 +33,17 @@ ClickEngine Analytics is a modern, professional-grade marketing analytics platfo
 - **Budget Utilization**: Investment vs. spend analysis
 - **Performance Metrics**: Paid users, conversion rates, and CAC per channel
 
-### 🔄 Funnel Analysis System
-- **Funnel Builder**: Design conversion funnels with GA4 event mapping
-- **Results Dashboard**: Card-based template performance overview  
-- **Detailed Analysis**: Step-by-step user journey visualization
-- **Bottleneck Detection**: Automatic identification of drop-off points
-- **Actionable Insights**: Specific optimization recommendations
-- **Time Analysis**: User behavior timing patterns
+### 🔄 Advanced Funnel Analysis V2
+- **Multi-Step Wizard Builder**: Create funnels with guided 3-step process
+- **17+ Pre-built Step Templates**: Marketing, user actions, business events, and engagement steps
+- **Real-time Form Validation**: Live input feedback with proper data handling
+- **Drag & Drop Step Ordering**: Reorder funnel steps with intuitive interface
+- **Custom Step Configuration**: Define custom events with GA4 and TeamTurbo integration
+- **UTM Template Management**: Built-in UTM parameter generation for each step
+- **Ad Configuration**: Specialized settings for ad click tracking (type, channel, format, keywords)
+- **Copy & Clone Functionality**: Duplicate existing funnels with automatic naming
+- **Performance Dashboard**: Card-based layout with conversion metrics and drop-off analysis
+- **Step-by-Step Analytics**: Detailed user journey with bottleneck identification
 
 ### 🔌 Integration Capabilities
 - **GA4 Integration**: Google Analytics 4 connection ready
@@ -104,7 +108,8 @@ docker-compose up -d
 cd frontend
 npm install
 npm start
-# Opens at http://localhost:3000
+# Development server at http://localhost:3000
+# Or run on custom port: PORT=9999 npm start
 ```
 
 **Backend Development**
@@ -129,8 +134,9 @@ clickengineA/
 │   │   │   ├── Dashboard.tsx  # Main dashboard
 │   │   │   ├── Campaigns.tsx  # Campaign management
 │   │   │   ├── Channels.tsx   # Channel analytics
-│   │   │   ├── FunnelAnalysis.tsx
-│   │   │   └── FunnelDetails.tsx
+│   │   │   ├── FunnelAnalysisV2Router.tsx      # Funnel routing
+│   │   │   ├── FunnelAnalysisV2Dashboard.tsx   # Funnel management
+│   │   │   └── FunnelAnalysisV2Builder.tsx     # Funnel creation/editing
 │   │   ├── services/          # API and data services
 │   │   └── types/             # TypeScript definitions
 │   └── package.json
@@ -176,18 +182,62 @@ const calculateCAC = (campaign: Campaign): number | null => {
 };
 ```
 
-### Funnel Analysis
+### Advanced Funnel Analysis V2
 ```typescript
-// Step-by-step user journey tracking
-interface FunnelStepAnalysis {
-  stepName: string;
+// Comprehensive funnel step configuration
+interface FunnelStepV2 {
+  id: string;
+  name: string;
+  description: string;
+  ga4EventName: string;
+  eventParameters: string[];
+  teamTurboAction: string;
+  utmTemplate: {
+    campaign: string;
+    source: string;
+    medium: string;
+    term: string;
+    content: string;
+  };
+  adConfig?: {
+    adType?: string;
+    channel?: string;
+    creativeFormat?: string;
+    keywords?: string[];
+  };
+}
+
+// Real-time step performance tracking
+interface StepPerformance {
+  stepId: string;
   users: number;
   conversionRate: number;
-  dropOffRate: number;
-  avgTimeToNext: number;
-  status: 'excellent' | 'good' | 'attention' | 'critical';
+  avgTimeToNext: string | null;
+  dropOffCount: number;
 }
 ```
+
+## 🆕 Latest Features & Improvements
+
+### Funnel Analysis V2 Enhancements
+- **✅ Fixed Form Data Persistence**: Resolved issue where funnel names showed as "untitled funnel" after editing
+- **✅ Real-time Input Feedback**: Live form validation with immediate visual feedback
+- **✅ Dual State Management**: Synchronizes form state with component state for consistent UX
+- **✅ Multi-step Wizard**: Guided creation process with Basic Info → Steps Configuration → Review & Save
+- **✅ Step Template Library**: 17+ pre-built templates organized by category:
+  - **Marketing & Ads**: Ad clicks, page views, blog engagement
+  - **User Actions**: Sign up, login, email verification, onboarding
+  - **Business Events**: Trial start, feature usage, pricing views, purchases
+  - **Engagement**: Content downloads, newsletter signups, webinar registrations, contact forms
+- **✅ Advanced Step Configuration**: Custom GA4 events, UTM templates, ad tracking parameters
+- **✅ Drag & Drop Reordering**: Intuitive step sequence management
+- **✅ Copy & Clone Functionality**: Duplicate existing funnels with automatic naming
+
+### Technical Improvements
+- **Form Architecture**: Fixed conditional rendering issues that prevented data access
+- **Type Safety**: Complete TypeScript interfaces for all funnel components
+- **Performance**: Optimized re-renders with proper state management
+- **User Experience**: Seamless navigation between wizard steps with data persistence
 
 ## 🔧 Available Scripts
 
@@ -283,30 +333,41 @@ GET    /api/v1/channels        # List channels
 POST   /api/v1/channels        # Create channel
 PUT    /api/v1/channels/:id    # Update channel
 
-GET    /api/v1/analytics/dashboard  # Dashboard metrics
-GET    /api/v1/funnels/:id/analyze  # Funnel analysis
+GET    /api/v1/analytics/dashboard     # Dashboard metrics
+GET    /api/v1/funnels/:id/analyze     # Funnel analysis
+
+# Frontend Routes (Client-side)
+/dashboard                          # Main analytics dashboard
+/campaigns                          # Campaign management
+/channels                           # Channel analytics
+/funnel-analysis-v2                 # Funnel Analysis V2 dashboard
+/funnel-analysis-v2/create          # Create new funnel
+/funnel-analysis-v2/edit/:id        # Edit existing funnel
 ```
 
 ## 🚀 Roadmap
 
-### ✅ Phase 1-3 (Completed)
+### ✅ Phase 1-4 (Completed)
 - Docker infrastructure setup
-- Dashboard with 8 key metrics
-- Campaign and channel management
-- Funnel analysis system
-- Professional UI/UX implementation
+- Dashboard with 8 key metrics and time filtering
+- Campaign and channel management with CAC analysis
+- Advanced Funnel Analysis V2 with multi-step wizard
+- Professional UI/UX implementation with Ant Design
+- Real-time form validation and data handling
+- 17+ funnel step templates with custom configuration
+- UTM parameter management and ad tracking
 
-### 🚧 Phase 4 (In Progress)
+### 🚧 Phase 5 (In Progress)
 - Real backend API implementation
-- User authentication
-- Advanced GA4 integration
-- Real-time data synchronization
+- User authentication and session management
+- Advanced GA4 integration with real data
+- PostgreSQL database integration
 
-### 📅 Phase 5 (Planned)
-- Machine learning insights
-- Predictive analytics
-- A/B testing framework
-- Custom dashboard builder
+### 📅 Phase 6 (Planned)
+- Machine learning insights and recommendations
+- Predictive analytics and forecasting
+- A/B testing framework integration
+- Custom dashboard builder with widgets
 
 ### 🔮 Future
 - Mobile application
