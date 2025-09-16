@@ -39,7 +39,6 @@ const { Option } = Select;
 
 // Interface for processed campaign data with calculated fields
 interface ProcessedCampaign extends CampaignSummary {
-  cac: number | null;
   budget_utilization_percent: number;
   channel_type: string;
 }
@@ -83,9 +82,10 @@ const Campaigns: React.FC = () => {
       // Add mock paid_users data for CAC calculation
       const campaignsWithMockData = (campaignResponse.data.data || []).map((campaign: CampaignSummary) => ({
         ...campaign,
-        paid_users: Math.floor(Math.random() * 50) + 5, // Mock 5-55 paid users
-        total_spend: campaign.actual_ad_spend || campaign.budget || Math.floor(Math.random() * 10000) + 1000
+        paid_users: campaign.paid_users || Math.floor(Math.random() * 50) + 10,
+        cac: campaign.cac || null
       }));
+      
       setCampaigns(campaignsWithMockData);
       setChannels(channelResponse.data.data || []);
       setGoals(goalsResponse.data.data || []);
@@ -100,7 +100,6 @@ const Campaigns: React.FC = () => {
     try {
       const params: any = {};
       if (searchTerm) params.search = searchTerm;
-      if (selectedChannel) params.channel_id = selectedChannel;
       if (selectedGoal) params.primary_goal = selectedGoal;
       if (selectedStatus) params.status = selectedStatus;
       
@@ -108,10 +107,37 @@ const Campaigns: React.FC = () => {
       // Add mock paid_users data for CAC calculation
       const campaignsWithMockData = (response.data.data || []).map((campaign: CampaignSummary) => ({
         ...campaign,
-        paid_users: Math.floor(Math.random() * 50) + 5, // Mock 5-55 paid users
-        total_spend: campaign.actual_ad_spend || campaign.budget || Math.floor(Math.random() * 10000) + 1000
+        paid_users: campaign.paid_users || Math.floor(Math.random() * 50) + 10,
+        cac: campaign.cac || null
       }));
-      setCampaigns(campaignsWithMockData);
+      
+      let filteredCampaigns = campaignsWithMockData;
+      
+      if (searchTerm) {
+        filteredCampaigns = filteredCampaigns.filter((campaign: CampaignSummary) => 
+          campaign.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+      
+      if (selectedChannel) {
+        filteredCampaigns = filteredCampaigns.filter((campaign: CampaignSummary) => 
+          campaign.channel_id === Number(selectedChannel)
+        );
+      }
+      
+      if (selectedGoal) {
+        filteredCampaigns = filteredCampaigns.filter((campaign: CampaignSummary) => 
+          campaign.primary_goal === selectedGoal
+        );
+      }
+      
+      if (selectedStatus) {
+        filteredCampaigns = filteredCampaigns.filter((campaign: CampaignSummary) => 
+          campaign.status === selectedStatus
+        );
+      }
+      
+      setCampaigns(filteredCampaigns);
     } catch (err: any) {
       console.error('Failed to fetch campaigns:', err);
     }
@@ -143,7 +169,7 @@ const Campaigns: React.FC = () => {
       setEditingCampaign(null);
       fetchCampaigns();
     } catch (err: any) {
-      message.error(err.response?.data?.error?.message || 'Operation failed');
+      message.error(err.message || 'Operation failed');
       throw err; // Re-throw to prevent modal closing
     } finally {
       setSubmitLoading(false);
@@ -163,7 +189,7 @@ const Campaigns: React.FC = () => {
           message.success('Campaign deleted successfully');
           fetchCampaigns();
         } catch (err: any) {
-          message.error(err.response?.data?.error?.message || 'Delete failed');
+          message.error(err.message || 'Delete failed');
         }
       },
     });
@@ -176,22 +202,10 @@ const Campaigns: React.FC = () => {
     setSelectedStatus(undefined);
   };
 
-  // Helper function to calculate CAC
-  const calculateCAC = (campaign: CampaignSummary): number | null => {
-    const totalSpend = campaign.total_spend || campaign.actual_ad_spend || 0;
-    const paidUsers = campaign.paid_users || 0;
-    
-    if (paidUsers === 0) {
-      return null; // Return null when no paid users (will display "--")
-    }
-    
-    return totalSpend / paidUsers;
-  };
 
-  // Process campaigns with CAC calculation
+  // Process campaigns with calculated fields
   const processedCampaigns: ProcessedCampaign[] = campaigns.map(campaign => ({
     ...campaign,
-    cac: calculateCAC(campaign),
     budget_utilization_percent: campaign.budget_utilization_percent || 
       (campaign.budget && campaign.total_spend ? (campaign.total_spend / campaign.budget) * 100 : 0),
     channel_type: channels.find(c => c.id === campaign.channel_id)?.type || 'Unknown'
@@ -246,23 +260,13 @@ const Campaigns: React.FC = () => {
             percent={Math.min(percent, 100)} 
             size="small"
             status={percent > 90 ? 'exception' : percent > 70 ? 'active' : 'normal'}
+            showInfo={false}
           />
           <div style={{ fontSize: '12px', textAlign: 'center' }}>
             {percent.toFixed(1)}%
           </div>
         </div>
       ),
-    },
-    {
-      title: 'CAC',
-      dataIndex: 'cac',
-      key: 'cac',
-      sorter: (a: ProcessedCampaign, b: ProcessedCampaign) => (a.cac || 0) - (b.cac || 0),
-      render: (cac: number | null) => {
-        if (cac === null) return '--';
-        const color = cac < 50 ? '#52c41a' : cac < 100 ? '#faad14' : '#ff4d4f';
-        return <span style={{ color }}>${cac.toFixed(2)}</span>;
-      },
     },
     {
       title: 'Campaign Period',

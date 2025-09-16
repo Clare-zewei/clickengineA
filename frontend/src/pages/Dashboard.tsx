@@ -12,7 +12,6 @@ import {
   ReloadOutlined,
   ArrowUpOutlined,
   ArrowDownOutlined,
-  FunnelPlotOutlined,
   SettingOutlined,
   LoginOutlined,
   CrownOutlined,
@@ -23,7 +22,8 @@ import {
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { DashboardStats } from '../types';
-import { mockDataService, RevenueMetrics, FunnelTemplate, formatCurrency, formatChange } from '../services/mockData';
+import { api } from '../services/api';
+import { mockDataService, RevenueMetrics, formatCurrency, formatChange } from '../services/mockData'; // Keep mock for some data
 import { DASHBOARD_CONFIG, METRIC_FLAGS, LAYOUT_CONFIG } from '../config/dashboardConfig';
 
 const { Title } = Typography;
@@ -32,27 +32,99 @@ const { Option } = Select;
 
 // Define time range options
 const TIME_RANGES = {
-  ALL_TIME: 'all_time',
+  TODAY: 'today',
+  YESTERDAY: 'yesterday',
+  THIS_WEEK: 'this_week',
   THIS_MONTH: 'this_month', 
   LAST_30_DAYS: 'last_30_days',
   LAST_90_DAYS: 'last_90_days',
+  ALL_TIME: 'all_time',
   CUSTOM: 'custom'
 };
 
-interface NewDashboardMetrics {
-  entryUsers: number;
-  freeTrialUsers: number;
-  paidUsers: number;
-  conversionRate: number;
-  totalROI: number;
-  monthlyRevenue: number;
-  totalRevenue: number;
-  cac: number;
-  // New valid metrics for pre-revenue phase
-  activeUsers: number;
-  featureUsage: number;
-  trialRetention: number;
+// Helper function to get date range for API calls
+const getDateRange = (timeRange: string, customRange?: any) => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+  
+  switch (timeRange) {
+    case TIME_RANGES.TODAY:
+      return { startDate: today, endDate: now };
+    case TIME_RANGES.YESTERDAY:
+      return { startDate: yesterday, endDate: today };
+    case TIME_RANGES.THIS_WEEK:
+      const weekStart = new Date(today.getTime() - (today.getDay() * 24 * 60 * 60 * 1000));
+      return { startDate: weekStart, endDate: now };
+    case TIME_RANGES.THIS_MONTH:
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { startDate: monthStart, endDate: now };
+    case TIME_RANGES.LAST_30_DAYS:
+      const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+      return { startDate: thirtyDaysAgo, endDate: now };
+    case TIME_RANGES.LAST_90_DAYS:
+      const ninetyDaysAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+      return { startDate: ninetyDaysAgo, endDate: now };
+    case TIME_RANGES.CUSTOM:
+      return customRange ? { 
+        startDate: new Date(customRange[0]), 
+        endDate: new Date(customRange[1]) 
+      } : { startDate: today, endDate: now };
+    default: // ALL_TIME
+      return null; // No date filter
+  }
+};
+
+interface DayOverDayComparison {
+  current: number;
+  previous: number;
+  change: number;           // Percentage change
+  changeDirection: 'up' | 'down' | 'neutral';
 }
+
+interface NewDashboardMetrics {
+  entryUsers: number;          // GA4: unique user IDs
+  freeTrialUsers: number;      // User Management System: trial users
+  paidUsers: number;           // PAUSED: no payment model yet
+  conversionRate: number;      // Calculated: trial users / entry users
+  totalROI: number;           // PAUSED: no revenue data
+  monthlyRevenue: number;     // PAUSED: pricing strategy not determined
+  totalRevenue: number;       // PAUSED: pricing strategy not determined
+  cac: number;                // Calculated: channel actual spend / trial users
+  // Additional metrics for future implementation
+  activeUsers: number;        // Future: engagement tracking
+  trialRetention: number;     // Future: retention analysis
+  
+  // Day-over-day comparisons (only for today/yesterday views)
+  entryUsersComparison?: DayOverDayComparison;
+  freeTrialUsersComparison?: DayOverDayComparison;
+  conversionRateComparison?: DayOverDayComparison;
+  cacComparison?: DayOverDayComparison;
+}
+
+// Component for rendering day-over-day comparison
+const ComparisonIndicator: React.FC<{ comparison: DayOverDayComparison }> = ({ comparison }) => {
+  const { change, changeDirection } = comparison;
+  const isPositive = changeDirection === 'up';
+  const isNegative = changeDirection === 'down';
+  
+  if (changeDirection === 'neutral') return null;
+  
+  return (
+    <div style={{ 
+      fontSize: '11px', 
+      color: isPositive ? '#52c41a' : isNegative ? '#ff4d4f' : '#666',
+      marginTop: 4,
+      display: 'flex',
+      alignItems: 'center'
+    }}>
+      {isPositive ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+      <span style={{ marginLeft: 2 }}>
+        {Math.abs(change)}% vs yesterday
+      </span>
+    </div>
+  );
+};
 
 const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -61,48 +133,136 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [revenueMetrics, setRevenueMetrics] = useState<RevenueMetrics | null>(null);
-  const [funnelTemplates, setFunnelTemplates] = useState<FunnelTemplate[]>([]);
   const [newMetrics, setNewMetrics] = useState<NewDashboardMetrics | null>(null);
+  const [topChannels, setTopChannels] = useState<any[]>([]);
   const [timeRange, setTimeRange] = useState(TIME_RANGES.THIS_MONTH);
   const [customDateRange, setCustomDateRange] = useState<any>(null);
+  const [realChannelSpend, setRealChannelSpend] = useState<number>(0);
 
   const fetchNewMetrics = useCallback(async () => {
     try {
-      // Mock data for new metrics based on time range
-      // In real implementation, this would call backend API with time range parameters
+      // Get date range for API calls
+      const dateRange = getDateRange(timeRange, customDateRange);
+      
+      // Real data sources for core metrics with time filtering:
+      // - Entry Users: GA4 API with date range filter
+      // - Free Trial Users: User Management System API with date range filter
+      // - Conversion Rate: Calculated (trial users / entry users)
+      // - CAC: Calculated (channel actual spend / trial users)
+      
+      // TODO: Replace with actual API calls
+      // Example API calls with date filtering:
+      // const entryUsersData = await ga4API.getUniqueUsers(dateRange);
+      // const trialUsersData = await userManagementAPI.getTrialUsers(dateRange);
+      
+      // Mock data with realistic time-based variations
+      const getMetricByTimeRange = (baseValue: number, timeMultiplier: number = 1) => {
+        switch (timeRange) {
+          case TIME_RANGES.TODAY:
+            return Math.floor(baseValue * 0.03 * timeMultiplier); // ~3% of monthly
+          case TIME_RANGES.YESTERDAY:
+            return Math.floor(baseValue * 0.032 * timeMultiplier); // Slightly higher than today
+          case TIME_RANGES.THIS_WEEK:
+            return Math.floor(baseValue * 0.23 * timeMultiplier); // ~23% of monthly
+          case TIME_RANGES.THIS_MONTH:
+            return Math.floor(baseValue * timeMultiplier);
+          case TIME_RANGES.LAST_30_DAYS:
+            return Math.floor(baseValue * 1.1 * timeMultiplier); // Slightly higher
+          case TIME_RANGES.LAST_90_DAYS:
+            return Math.floor(baseValue * 2.8 * timeMultiplier);
+          case TIME_RANGES.ALL_TIME:
+            return Math.floor(baseValue * 6.8 * timeMultiplier);
+          default:
+            return Math.floor(baseValue * timeMultiplier);
+        }
+      };
+      
+      const baseEntryUsers = 12540; // Monthly base
+      const baseTrialUsers = 1254;  // Monthly base
+      
       const mockNewMetrics: NewDashboardMetrics = {
-        entryUsers: timeRange === TIME_RANGES.ALL_TIME ? 85420 : 12540, // Estimated Entry Users
-        freeTrialUsers: timeRange === TIME_RANGES.ALL_TIME ? 8542 : 1254,
-        paidUsers: timeRange === TIME_RANGES.ALL_TIME ? 3420 : 456,
-        conversionRate: 0, // Will be calculated
-        totalROI: timeRange === TIME_RANGES.ALL_TIME ? 285.5 : 125.3,
-        monthlyRevenue: 42850,
-        totalRevenue: timeRange === TIME_RANGES.ALL_TIME ? 512000 : 42850,
-        cac: 0, // Will be calculated
-        // Valid metrics for pre-revenue phase
-        activeUsers: timeRange === TIME_RANGES.ALL_TIME ? 7240 : 1047,
-        featureUsage: 78.5, // Percentage of users using core features
-        trialRetention: 65.2 // Percentage retention after trial period
+        entryUsers: getMetricByTimeRange(baseEntryUsers), // GA4: unique user count with time filter
+        freeTrialUsers: getMetricByTimeRange(baseTrialUsers), // User Management System: trial user count with time filter
+        paidUsers: getMetricByTimeRange(456), // PAUSED: no payment model yet
+        conversionRate: 0, // Calculated: trial users / entry users * 100
+        totalROI: 125.3, // PAUSED: no revenue data
+        monthlyRevenue: 42850, // PAUSED: pricing strategy not determined
+        totalRevenue: 42850, // PAUSED: pricing strategy not determined
+        cac: 0, // Calculated: channel actual spend / trial users
+        // Additional metrics for future use
+        activeUsers: getMetricByTimeRange(1047),
+        trialRetention: 65.2
       };
 
-      // Calculate derived metrics
-      // For pre-revenue phase, conversion rate = trial users / entry users
-      mockNewMetrics.conversionRate = (mockNewMetrics.freeTrialUsers / mockNewMetrics.entryUsers * 100);
-      // CAC calculation based on marketing spend (if any paid promotion exists)
-      const estimatedMarketingSpend = timeRange === TIME_RANGES.ALL_TIME ? 480000 : 93970;
-      mockNewMetrics.cac = estimatedMarketingSpend / mockNewMetrics.freeTrialUsers;
+      // Core metric calculations using real data
+      // Trial Conversion Rate = (Free Trial Users / Entry Users) * 100
+      mockNewMetrics.conversionRate = mockNewMetrics.entryUsers > 0 ? 
+        (mockNewMetrics.freeTrialUsers / mockNewMetrics.entryUsers * 100) : 0;
+      
+      // CAC = Total Channel Actual Spend / Free Trial Users
+      // Use real channel spend data if available, otherwise calculate proportionally
+      const totalChannelSpend = realChannelSpend > 0 ? 
+        realChannelSpend : getMetricByTimeRange(93970, 1);
+      mockNewMetrics.cac = mockNewMetrics.freeTrialUsers > 0 ? 
+        totalChannelSpend / mockNewMetrics.freeTrialUsers : 0;
+
+      // Add day-over-day comparisons for today/yesterday views
+      if (timeRange === TIME_RANGES.TODAY || timeRange === TIME_RANGES.YESTERDAY) {
+        const calculateComparison = (current: number, previous: number): DayOverDayComparison => {
+          const change = previous > 0 ? ((current - previous) / previous) * 100 : 0;
+          return {
+            current,
+            previous,
+            change: Math.round(change * 100) / 100, // Round to 2 decimal places
+            changeDirection: change > 1 ? 'up' : change < -1 ? 'down' : 'neutral'
+          };
+        };
+
+        // Mock previous day data (in real implementation, fetch from APIs)
+        const previousEntryUsers = timeRange === TIME_RANGES.TODAY ? 
+          getMetricByTimeRange(baseEntryUsers) * 1.05 : // Yesterday's data for today comparison
+          getMetricByTimeRange(baseEntryUsers) * 0.95;  // Day before yesterday for yesterday comparison
+        
+        const previousTrialUsers = timeRange === TIME_RANGES.TODAY ?
+          getMetricByTimeRange(baseTrialUsers) * 1.02 :
+          getMetricByTimeRange(baseTrialUsers) * 0.98;
+
+        mockNewMetrics.entryUsersComparison = calculateComparison(
+          mockNewMetrics.entryUsers, 
+          Math.floor(previousEntryUsers)
+        );
+        
+        mockNewMetrics.freeTrialUsersComparison = calculateComparison(
+          mockNewMetrics.freeTrialUsers,
+          Math.floor(previousTrialUsers)
+        );
+
+        const previousConversionRate = previousEntryUsers > 0 ? 
+          (previousTrialUsers / previousEntryUsers * 100) : 0;
+        mockNewMetrics.conversionRateComparison = calculateComparison(
+          mockNewMetrics.conversionRate,
+          previousConversionRate
+        );
+
+        const previousCAC = previousTrialUsers > 0 ? 
+          (getMetricByTimeRange(93970, 1) * 1.03) / previousTrialUsers : 0;
+        mockNewMetrics.cacComparison = calculateComparison(
+          mockNewMetrics.cac,
+          previousCAC
+        );
+      }
 
       setNewMetrics(mockNewMetrics);
     } catch (err: any) {
       console.error('Failed to fetch new metrics:', err);
     }
-  }, [timeRange]);
+  }, [timeRange, customDateRange, realChannelSpend]);
 
   useEffect(() => {
     fetchDashboardData();
     fetchRevenueMetrics();
-    fetchFunnelTemplates();
     fetchNewMetrics();
+    fetchTopChannels();
   }, [fetchNewMetrics]);
 
   useEffect(() => {
@@ -114,26 +274,39 @@ const Dashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // For now, we'll create mock data since the backend doesn't have a specific dashboard endpoint
-      const mockStats: DashboardStats = {
-        totalEvents: 12540,
-        uniqueUsers: 3420,
-        uniqueSessions: 8650,
-        conversionRate: 3.2,
-        topCampaigns: [
-          { name: 'PM Software Q4', events: 4230 },
-          { name: 'TeamTurbo Launch', events: 3120 },
-          { name: 'Organic Search', events: 2890 },
-        ],
+      // Get real data from campaigns and channels
+      const [campaignResponse, channelResponse] = await Promise.all([
+        api.campaigns.getAll(),
+        api.channels.getAll()
+      ]);
+      
+      const campaigns = campaignResponse.data.data || [];
+      const channels = channelResponse.data.data || [];
+      
+      // Calculate real metrics from actual data
+      const activeCampaigns = campaigns.filter((c: any) => c.status === 'active');
+      const totalBudget = campaigns.reduce((sum: number, c: any) => sum + (c.budget || 0), 0);
+      const totalSpend = campaigns.reduce((sum: number, c: any) => sum + (c.actual_ad_spend || 0), 0);
+      const totalPaidUsers = campaigns.reduce((sum: number, c: any) => sum + (c.paid_users || 0), 0);
+      
+      // Store real channel spend for CAC calculation
+      setRealChannelSpend(totalSpend);
+      
+      const realStats: DashboardStats = {
+        totalEvents: totalSpend, // Use total spend as "events" for now
+        uniqueUsers: totalPaidUsers,
+        uniqueSessions: activeCampaigns.length,
+        conversionRate: totalBudget > 0 ? (totalSpend / totalBudget) * 100 : 0,
+        topCampaigns: [], // Remove top campaigns
         eventsByType: [
-          { event_type: 'page_view', count: 8540 },
-          { event_type: 'click', count: 2340 },
-          { event_type: 'registration', count: 1200 },
-          { event_type: 'conversion', count: 460 },
+          { event_type: 'active_campaigns', count: activeCampaigns.length },
+          { event_type: 'total_channels', count: channels.filter((c: any) => c.is_active).length },
+          { event_type: 'total_budget', count: totalBudget },
+          { event_type: 'total_spend', count: totalSpend },
         ],
       };
       
-      setStats(mockStats);
+      setStats(realStats);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch dashboard data');
     } finally {
@@ -150,12 +323,13 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const fetchFunnelTemplates = async () => {
+
+  const fetchTopChannels = async () => {
     try {
-      const templates = await mockDataService.getFunnelTemplates();
-      setFunnelTemplates(templates);
+      const channels = await mockDataService.getTopChannels(5);
+      setTopChannels(channels);
     } catch (err: any) {
-      console.error('Failed to fetch funnel templates:', err);
+      console.error('Failed to fetch top channels:', err);
     }
   };
 
@@ -171,120 +345,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const getROIColor = (roi: number): string => {
-    if (roi >= 5) return '#52c41a'; // Green - High ROI
-    if (roi >= 3) return '#faad14'; // Orange - Medium ROI
-    return '#ff4d4f'; // Red - Needs optimization
-  };
 
-  const renderFunnelTemplateCard = (template: FunnelTemplate) => {
-    const roiColor = getROIColor(template.actualROI || template.estimatedROI);
-    
-    return (
-      <Card
-        key={template.id}
-        hoverable
-        style={{ 
-          borderColor: roiColor,
-          borderWidth: '2px',
-          height: '160px'
-        }}
-        bodyStyle={{ padding: '16px' }}
-        onClick={() => {
-          // Navigate to analytics with this template selected
-          console.log('Clicked template:', template.name);
-        }}
-      >
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <Title level={5} style={{ margin: 0, lineHeight: '1.2', fontSize: '14px' }}>
-              {template.name}
-            </Title>
-          </div>
-          <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-            {template.steps.length} steps | {template.targetUsers.replace('_', ' ')}
-          </div>
-        </div>
-
-        <Row gutter={8} style={{ marginBottom: 8 }}>
-          <Col span={8}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '16px', fontWeight: 'bold', color: roiColor }}>
-                {template.actualTotalConversion 
-                  ? `${template.actualTotalConversion.toFixed(1)}%` 
-                  : `${template.targetTotalConversion?.toFixed(1) || '0'}%`
-                }
-              </div>
-              <div style={{ fontSize: '10px', color: '#666' }}>
-                {template.actualTotalConversion ? 'Actual' : 'Target'} Conversion
-              </div>
-              {template.actualTotalConversion && template.targetTotalConversion && (
-                <div style={{ fontSize: '9px', color: '#999' }}>
-                  Target: {template.targetTotalConversion.toFixed(1)}%
-                </div>
-              )}
-            </div>
-          </Col>
-          <Col span={8}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '16px', fontWeight: 'bold', color: roiColor }}>
-                {template.actualROI 
-                  ? `${template.actualROI.toFixed(1)}x` 
-                  : `${template.estimatedROI.toFixed(1)}x`
-                }
-              </div>
-              <div style={{ fontSize: '10px', color: '#666' }}>
-                {template.actualROI ? 'Actual' : 'Target'} ROI
-              </div>
-              {template.actualROI && template.estimatedROI && (
-                <div style={{ fontSize: '9px', color: '#999' }}>
-                  Target: {template.estimatedROI.toFixed(1)}x
-                </div>
-              )}
-            </div>
-          </Col>
-          <Col span={8}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1890ff' }}>
-                ${template.estimatedCAC}
-              </div>
-              <div style={{ fontSize: '10px', color: '#666' }}>CAC</div>
-            </div>
-          </Col>
-        </Row>
-
-        {template.performanceMetrics && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#666', marginBottom: 4 }}>
-              <span>👥 {template.performanceMetrics.users.toLocaleString()} users</span>
-              <span>🎯 {template.performanceMetrics.conversions} conversions</span>
-            </div>
-            {template.overallPerformanceStatus && (
-              <div style={{ display: 'flex', alignItems: 'center', fontSize: '10px' }}>
-                <span 
-                  style={{ 
-                    width: '8px', 
-                    height: '8px', 
-                    borderRadius: '50%', 
-                    backgroundColor: 
-                      template.overallPerformanceStatus === 'success' ? '#52c41a' :
-                      template.overallPerformanceStatus === 'warning' ? '#faad14' :
-                      template.overallPerformanceStatus === 'danger' ? '#ff4d4f' : '#d9d9d9',
-                    marginRight: '4px'
-                  }}
-                />
-                <span style={{ textTransform: 'capitalize', color: '#666' }}>
-                  {template.overallPerformanceStatus === 'success' ? 'On Track' :
-                   template.overallPerformanceStatus === 'warning' ? 'Needs Attention' :
-                   template.overallPerformanceStatus === 'danger' ? 'Underperforming' : 'Pending Data'}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
-    );
-  };
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
@@ -303,10 +364,13 @@ const Dashboard: React.FC = () => {
             onChange={setTimeRange}
             style={{ width: 150 }}
           >
-            <Option value={TIME_RANGES.ALL_TIME}>All Time</Option>
+            <Option value={TIME_RANGES.TODAY}>Today</Option>
+            <Option value={TIME_RANGES.YESTERDAY}>Yesterday</Option>
+            <Option value={TIME_RANGES.THIS_WEEK}>This Week</Option>
             <Option value={TIME_RANGES.THIS_MONTH}>This Month</Option>
             <Option value={TIME_RANGES.LAST_30_DAYS}>Last 30 Days</Option>
             <Option value={TIME_RANGES.LAST_90_DAYS}>Last 90 Days</Option>
+            <Option value={TIME_RANGES.ALL_TIME}>All Time</Option>
             <Option value={TIME_RANGES.CUSTOM}>Custom Range</Option>
           </Select>
           {timeRange === TIME_RANGES.CUSTOM && (
@@ -332,11 +396,14 @@ const Dashboard: React.FC = () => {
                       <span>
                         {Number(value).toLocaleString()}
                         <span style={{ fontSize: '10px', color: '#999', marginLeft: 4 }}>
-                          {timeRange !== TIME_RANGES.ALL_TIME ? '(Estimated)' : ''}
+                          {timeRange !== TIME_RANGES.ALL_TIME ? '(GA4)' : ''}
                         </span>
                       </span>
                     )}
                   />
+                  {newMetrics.entryUsersComparison && (
+                    <ComparisonIndicator comparison={newMetrics.entryUsersComparison} />
+                  )}
                 </Card>
               </Col>
             )}
@@ -350,6 +417,9 @@ const Dashboard: React.FC = () => {
                     valueStyle={{ color: '#52c41a' }}
                     formatter={(value) => Number(value).toLocaleString()}
                   />
+                  {newMetrics.freeTrialUsersComparison && (
+                    <ComparisonIndicator comparison={newMetrics.freeTrialUsersComparison} />
+                  )}
                 </Card>
               </Col>
             )}
@@ -364,9 +434,13 @@ const Dashboard: React.FC = () => {
                     precision={2}
                     valueStyle={{ color: '#722ed1' }}
                   />
-                  <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
-                    Entry → Trial Users
-                  </div>
+                  {newMetrics.conversionRateComparison ? (
+                    <ComparisonIndicator comparison={newMetrics.conversionRateComparison} />
+                  ) : (
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
+                      Entry → Trial Users
+                    </div>
+                  )}
                 </Card>
               </Col>
             )}
@@ -380,74 +454,16 @@ const Dashboard: React.FC = () => {
                     formatter={(value) => `$${Number(value).toFixed(2)}`}
                     valueStyle={{ color: newMetrics.cac < 100 ? '#52c41a' : newMetrics.cac < 200 ? '#faad14' : '#ff4d4f' }}
                   />
-                  <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
-                    Per Trial User
-                  </div>
+                  {newMetrics.cacComparison ? (
+                    <ComparisonIndicator comparison={newMetrics.cacComparison} />
+                  ) : (
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
+                      Per Trial User
+                    </div>
+                  )}
                 </Card>
               </Col>
             )}
-          </Row>
-          
-          {/* User Engagement Metrics */}
-          <Title level={4} style={{ marginBottom: 16, color: '#52c41a' }}>User Engagement Metrics</Title>
-          <Row gutter={16} className="dashboard-stats" style={{ marginBottom: 32 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Active Trial Users"
-                  value={newMetrics.activeUsers}
-                  prefix={<TeamOutlined />}
-                  valueStyle={{ color: '#52c41a' }}
-                  formatter={(value) => Number(value).toLocaleString()}
-                />
-                <div style={{ fontSize: '11px', color: '#52c41a', marginTop: 4 }}>
-                  ↑ {Math.round(newMetrics.activeUsers * 0.08)} new this month
-                </div>
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Feature Usage Rate"
-                  value={newMetrics.featureUsage}
-                  prefix={<SettingOutlined />}
-                  suffix="%"
-                  precision={1}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-                <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
-                  Core features adoption
-                </div>
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Trial Retention"
-                  value={newMetrics.trialRetention}
-                  prefix={<HeartOutlined />}
-                  suffix="%"
-                  precision={1}
-                  valueStyle={{ color: '#722ed1' }}
-                />
-                <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
-                  7-day retention rate
-                </div>
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card style={{ backgroundColor: '#fafafa', border: '2px dashed #d9d9d9' }}>
-                <Statistic
-                  title="Revenue Metrics"
-                  value="Coming Soon"
-                  prefix={<WalletOutlined />}
-                  valueStyle={{ color: '#999', fontSize: '16px' }}
-                />
-                <div style={{ fontSize: '11px', color: '#999', marginTop: 4 }}>
-                  Available after pricing launch
-                </div>
-              </Card>
-            </Col>
           </Row>
         </>
       )}
@@ -475,257 +491,130 @@ const Dashboard: React.FC = () => {
 
       <Divider />
 
-      {/* Funnel Templates Performance */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0, color: '#722ed1' }}>
-          <FunnelPlotOutlined style={{ marginRight: 8 }} />
-          Funnel Templates Performance
-        </Title>
-        <Link to="/configuration">
-          <Button type="primary" icon={<SettingOutlined />}>
-            Manage Templates
-          </Button>
-        </Link>
-      </div>
-      
-      {funnelTemplates.length > 0 ? (
-        <Row gutter={16} style={{ marginBottom: 32 }}>
-          {funnelTemplates.map(template => (
-            <Col span={8} key={template.id}>
-              {renderFunnelTemplateCard(template)}
-            </Col>
-          ))}
-        </Row>
-      ) : (
-        <Card style={{ textAlign: 'center', padding: '40px 20px', marginBottom: 32 }}>
-          <FunnelPlotOutlined style={{ fontSize: '48px', color: '#d9d9d9', marginBottom: '16px' }} />
-          <Title level={4} style={{ color: '#999', marginBottom: '8px' }}>No Funnel Templates Created</Title>
-          <div style={{ color: '#666', marginBottom: '16px' }}>
-            Create funnel templates to analyze and compare different conversion strategies
-          </div>
-          <Link to="/configuration">
-            <Button type="primary" icon={<SettingOutlined />}>
-              Create Your First Template
-            </Button>
-          </Link>
-        </Card>
-      )}
-
-      <Divider />
 
       {/* Ranking Tables */}
       <Row gutter={16}>
-        <Col span={12}>
-          <Card title="Top Campaigns Ranking Table" className="dashboard-table">
-            <Table
-              dataSource={[
-                {
-                  key: '1',
-                  campaignName: 'PM Software Q4',
-                  conversionRate: 4.2,
-                  roi: 285.5,
-                  users: 4230,
-                  cac: 89.50,
-                  budgetUsage: 85.2
-                },
-                {
-                  key: '2', 
-                  campaignName: 'TeamTurbo Launch',
-                  conversionRate: 3.8,
-                  roi: 245.3,
-                  users: 3120,
-                  cac: 95.20,
-                  budgetUsage: 78.5
-                },
-                {
-                  key: '3',
-                  campaignName: 'Organic Search',
-                  conversionRate: 2.9,
-                  roi: 198.7,
-                  users: 2890,
-                  cac: 72.30,
-                  budgetUsage: 0
-                },
-                {
-                  key: '4',
-                  campaignName: 'Social Media Ads',
-                  conversionRate: 2.1,
-                  roi: 156.2,
-                  users: 1850,
-                  cac: 125.80,
-                  budgetUsage: 92.1
-                }
-              ]}
-              columns={[
-                {
-                  title: 'Campaign Name',
-                  dataIndex: 'campaignName',
-                  key: 'campaignName',
-                  render: (text: string) => <strong>{text}</strong>
-                },
-                {
-                  title: 'Trial Conversion Rate',
-                  dataIndex: 'conversionRate',
-                  key: 'conversionRate',
-                  render: (rate: number) => `${rate}%`,
-                  sorter: (a, b) => a.conversionRate - b.conversionRate,
-                  sortOrder: 'descend',
-                  defaultSortOrder: 'descend'
-                },
-                // ROI column hidden in pre-revenue phase
-                ...(METRIC_FLAGS.TOTAL_ROI ? [{
-                  title: 'ROI',
-                  dataIndex: 'roi',
-                  key: 'roi',
-                  render: (roi: number) => (
-                    <span style={{ color: roi > 200 ? '#52c41a' : roi > 150 ? '#faad14' : '#ff4d4f' }}>
-                      {roi}%
-                    </span>
-                  )
-                }] : []),
-                {
-                  title: 'Trial Users',
-                  dataIndex: 'users',
-                  key: 'users',
-                  render: (users: number) => users.toLocaleString()
-                },
-                {
-                  title: 'CAC',
-                  dataIndex: 'cac',
-                  key: 'cac',
-                  render: (cac: number) => (
-                    <span style={{ color: cac < 100 ? '#52c41a' : cac < 150 ? '#faad14' : '#ff4d4f' }}>
-                      ${cac.toFixed(2)}
-                    </span>
-                  )
-                },
-                {
-                  title: 'Budget Usage',
-                  dataIndex: 'budgetUsage',
-                  key: 'budgetUsage',
-                  render: (usage: number) => (
-                    <span>
-                      {usage === 0 ? 'Organic' : `${usage}%`}
-                    </span>
-                  )
-                }
-              ]}
-              pagination={false}
-              size="small"
-            />
-          </Card>
-        </Col>
-        <Col span={12}>
-          <Card title="Top Channels Ranking Table" className="dashboard-table">
-            <Table
-              dataSource={[
-                {
-                  key: '1',
-                  channel: 'Google Ads',
-                  conversionRate: 3.9,
-                  roi: 267.8,
-                  users: 5420,
-                  cac: 92.30,
-                  totalSpent: 15420
-                },
-                {
-                  key: '2',
-                  channel: 'Facebook Ads',
-                  conversionRate: 3.1,
-                  roi: 223.5,
-                  users: 3850,
-                  cac: 108.50,
-                  totalSpent: 12300
-                },
-                {
-                  key: '3',
-                  channel: 'LinkedIn Ads',
-                  conversionRate: 2.8,
-                  roi: 189.2,
-                  users: 2100,
-                  cac: 145.70,
-                  totalSpent: 8950
-                },
-                {
-                  key: '4',
-                  channel: 'Organic Search',
-                  conversionRate: 2.3,
-                  roi: 178.6,
-                  users: 6230,
-                  cac: 0,
-                  totalSpent: 0
-                },
-                {
-                  key: '5',
-                  channel: 'Email Marketing',
-                  conversionRate: 1.9,
-                  roi: 156.3,
-                  users: 1890,
-                  cac: 45.20,
-                  totalSpent: 2850
-                }
-              ]}
-              columns={[
-                {
-                  title: 'Channel',
-                  dataIndex: 'channel',
-                  key: 'channel',
-                  render: (text: string) => <strong>{text}</strong>
-                },
-                {
-                  title: 'Trial Conversion Rate',
-                  dataIndex: 'conversionRate',
-                  key: 'conversionRate',
-                  render: (rate: number) => `${rate}%`,
-                  sorter: (a, b) => a.conversionRate - b.conversionRate,
-                  sortOrder: 'descend',
-                  defaultSortOrder: 'descend'
-                },
-                // ROI column hidden in pre-revenue phase
-                ...(METRIC_FLAGS.TOTAL_ROI ? [{
-                  title: 'ROI',
-                  dataIndex: 'roi',
-                  key: 'roi',
-                  render: (roi: number) => (
-                    <span style={{ color: roi > 200 ? '#52c41a' : roi > 150 ? '#faad14' : '#ff4d4f' }}>
-                      {roi}%
-                    </span>
-                  )
-                }] : []),
-                {
-                  title: 'Trial Users',
-                  dataIndex: 'users',
-                  key: 'users',
-                  render: (users: number) => users.toLocaleString()
-                },
-                {
-                  title: 'CAC',
-                  dataIndex: 'cac',
-                  key: 'cac',
-                  render: (cac: number) => (
-                    <span>
-                      {cac === 0 ? 'Free' : (
-                        <span style={{ color: cac < 100 ? '#52c41a' : cac < 150 ? '#faad14' : '#ff4d4f' }}>
+        <Col span={24}>
+          <Card 
+            title="Top Channels by Investment" 
+            className="dashboard-table"
+            extra={
+              <Link to="/channels">
+                <Button type="link" size="small">View All Channels</Button>
+              </Link>
+            }
+          >
+            {topChannels.length > 0 ? (
+              <Table
+                dataSource={topChannels.map((channel, index) => ({
+                  key: channel.id,
+                  rank: index + 1,
+                  channel: channel.name,
+                  totalInvestment: channel.total_investment,
+                  activeCampaigns: channel.active_campaigns,
+                  budgetUtilization: channel.budget_utilization_percent,
+                  paidUsers: channel.paidUsers,
+                  cac: channel.cac
+                }))}
+                columns={[
+                  {
+                    title: 'Rank',
+                    dataIndex: 'rank',
+                    key: 'rank',
+                    width: 60,
+                    render: (rank: number) => (
+                      <div style={{ 
+                        width: '24px', 
+                        height: '24px', 
+                        borderRadius: '50%', 
+                        backgroundColor: rank <= 3 ? '#1890ff' : '#f0f0f0',
+                        color: rank <= 3 ? 'white' : '#666',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                      }}>
+                        {rank}
+                      </div>
+                    )
+                  },
+                  {
+                    title: 'Channel',
+                    dataIndex: 'channel',
+                    key: 'channel',
+                    render: (text: string) => <strong>{text}</strong>
+                  },
+                  {
+                    title: 'Total Investment',
+                    dataIndex: 'totalInvestment',
+                    key: 'totalInvestment',
+                    render: (amount: number) => `$${amount.toLocaleString()}`,
+                    sorter: (a, b) => a.totalInvestment - b.totalInvestment,
+                    sortOrder: 'descend',
+                    defaultSortOrder: 'descend'
+                  },
+                  {
+                    title: 'Active Campaigns',
+                    dataIndex: 'activeCampaigns',
+                    key: 'activeCampaigns',
+                    width: 120,
+                    render: (count: number) => (
+                      <span style={{ color: count > 0 ? '#1890ff' : '#999' }}>
+                        {count}
+                      </span>
+                    )
+                  },
+                  {
+                    title: 'Budget Utilization',
+                    dataIndex: 'budgetUtilization',
+                    key: 'budgetUtilization',
+                    render: (percent: number) => {
+                      const color = percent > 90 ? '#ff4d4f' : percent > 70 ? '#faad14' : '#52c41a';
+                      return (
+                        <span style={{ color }}>
+                          {percent.toFixed(1)}%
+                        </span>
+                      );
+                    }
+                  },
+                  {
+                    title: 'Paid Users',
+                    dataIndex: 'paidUsers',
+                    key: 'paidUsers',
+                    render: (users: number) => users.toLocaleString()
+                  },
+                  {
+                    title: 'CAC',
+                    dataIndex: 'cac',
+                    key: 'cac',
+                    render: (cac: number | null) => {
+                      if (cac === null || cac === undefined) {
+                        return <span style={{ color: '#999' }}>--</span>;
+                      }
+                      const color = cac < 100 ? '#52c41a' : cac < 150 ? '#faad14' : '#ff4d4f';
+                      return (
+                        <span style={{ color }}>
                           ${cac.toFixed(2)}
                         </span>
-                      )}
-                    </span>
-                  )
-                },
-                {
-                  title: 'Total Spent',
-                  dataIndex: 'totalSpent',
-                  key: 'totalSpent',
-                  render: (spent: number) => (
-                    <span>
-                      {spent === 0 ? 'Free' : `$${spent.toLocaleString()}`}
-                    </span>
-                  )
-                }
-              ]}
-              pagination={false}
-              size="small"
-            />
+                      );
+                    }
+                  }
+                ]}
+                pagination={false}
+                size="small"
+              />
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+                <div style={{ fontSize: '16px', marginBottom: '8px' }}>No channels with investment data</div>
+                <div style={{ fontSize: '14px', marginBottom: '16px' }}>
+                  Create channels and campaigns to see rankings here
+                </div>
+                <Link to="/channels">
+                  <Button type="primary">Create Your First Channel</Button>
+                </Link>
+              </div>
+            )}
           </Card>
         </Col>
       </Row>

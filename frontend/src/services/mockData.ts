@@ -178,6 +178,80 @@ export interface CustomEvent extends GA4Event {
 
 // Mock data generators
 export const mockDataService = {
+  // Campaigns data
+  getCampaigns: (): Promise<any[]> => {
+    return new Promise(resolve => {
+      setTimeout(() => {
+        // Only get data from localStorage, return empty array if none exists
+        const storedCampaigns = localStorage.getItem('campaigns');
+        if (storedCampaigns) {
+          resolve(JSON.parse(storedCampaigns));
+        } else {
+          resolve([]); // Return empty array for clean start
+        }
+      }, 500);
+    });
+  },
+
+  // Channels data with dynamic calculation
+  getChannels: async (): Promise<any[]> => {
+    // Get campaigns data first to calculate channel metrics
+    const campaigns = await mockDataService.getCampaigns();
+    
+    return new Promise(resolve => {
+      setTimeout(() => {
+        // Try to get from localStorage first, fallback to default data
+        const storedChannels = localStorage.getItem('channels');
+        if (storedChannels) {
+          const channels = JSON.parse(storedChannels);
+          // Still need to recalculate dynamic metrics based on campaigns
+          const channelsWithMetrics = channels.map((channel: any) => {
+            const channelCampaigns = campaigns.filter((campaign: any) => campaign.channel_id === channel.id);
+            
+            const total_campaigns = channelCampaigns.length;
+            const active_campaigns = channelCampaigns.filter((c: any) => c.status === 'active').length;
+            const total_budget = channelCampaigns.reduce((sum: number, c: any) => sum + (c.budget || 0), 0);
+            const total_investment = channelCampaigns.reduce((sum: number, c: any) => sum + (c.total_spend || 0), 0);
+            const budget_utilization_percent = total_budget > 0 ? (total_investment / total_budget) * 100 : 0;
+            const paidUsers = channelCampaigns.reduce((sum: number, c: any) => sum + (c.paid_users || 0), 0);
+            const cac = paidUsers > 0 ? total_investment / paidUsers : null;
+
+            return {
+              ...channel,
+              total_campaigns,
+              active_campaigns,
+              total_budget,
+              total_investment,
+              budget_utilization_percent,
+              paidUsers,
+              cac
+            };
+          });
+          resolve(channelsWithMetrics);
+          return;
+        }
+        
+        // Return empty array for clean start (no default channels)
+        resolve([]);
+      }, 300);
+    });
+  },
+
+  // Campaign goals data
+  getCampaignGoals: (): Promise<any[]> => {
+    return new Promise(resolve => {
+      setTimeout(() => {
+        resolve([
+          { id: 'lead_generation', name: 'Lead Generation', description: 'Generate qualified leads' },
+          { id: 'brand_awareness', name: 'Brand Awareness', description: 'Increase brand visibility' },
+          { id: 'sales', name: 'Direct Sales', description: 'Drive direct sales conversions' },
+          { id: 'engagement', name: 'User Engagement', description: 'Increase user engagement' },
+          { id: 'retention', name: 'Customer Retention', description: 'Retain existing customers' }
+        ]);
+      }, 200);
+    });
+  },
+
   // Revenue metrics for dashboard
   getRevenueMetrics: (): Promise<RevenueMetrics> => {
     return new Promise(resolve => {
@@ -1020,6 +1094,198 @@ export const mockDataService = {
         });
       }, 800);
     });
+  },
+
+  // CRUD Operations for Campaigns
+  createCampaign: async (campaignData: any): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+          const newId = Math.max(...campaigns.map((c: any) => c.id || 0), 0) + 1;
+          
+          const newCampaign = {
+            id: newId,
+            ...campaignData,
+            total_spend: campaignData.actual_ad_spend || 0,
+            budget_utilization_percent: campaignData.budget && campaignData.actual_ad_spend ? 
+              (campaignData.actual_ad_spend / campaignData.budget) * 100 : 0,
+            paid_users: 0, // Default for new campaign
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          campaigns.push(newCampaign);
+          localStorage.setItem('campaigns', JSON.stringify(campaigns));
+          resolve(newCampaign);
+        } catch (error) {
+          reject(error);
+        }
+      }, 500);
+    });
+  },
+
+  updateCampaign: async (id: number, campaignData: any): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+          const index = campaigns.findIndex((c: any) => c.id === id);
+          
+          if (index === -1) {
+            reject(new Error('Campaign not found'));
+            return;
+          }
+          
+          campaigns[index] = {
+            ...campaigns[index],
+            ...campaignData,
+            total_spend: campaignData.actual_ad_spend || campaigns[index].total_spend,
+            budget_utilization_percent: campaignData.budget && campaignData.actual_ad_spend ? 
+              (campaignData.actual_ad_spend / campaignData.budget) * 100 : campaigns[index].budget_utilization_percent,
+            updated_at: new Date().toISOString()
+          };
+          
+          localStorage.setItem('campaigns', JSON.stringify(campaigns));
+          resolve(campaigns[index]);
+        } catch (error) {
+          reject(error);
+        }
+      }, 500);
+    });
+  },
+
+  deleteCampaign: async (id: number): Promise<boolean> => {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+          const filteredCampaigns = campaigns.filter((c: any) => c.id !== id);
+          
+          if (campaigns.length === filteredCampaigns.length) {
+            reject(new Error('Campaign not found'));
+            return;
+          }
+          
+          localStorage.setItem('campaigns', JSON.stringify(filteredCampaigns));
+          resolve(true);
+        } catch (error) {
+          reject(error);
+        }
+      }, 300);
+    });
+  },
+
+  // CRUD Operations for Channels
+  createChannel: async (channelData: any): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          const channels = JSON.parse(localStorage.getItem('channels') || '[]');
+          const newId = Math.max(...channels.map((c: any) => c.id || 0), 0) + 1;
+          
+          const newChannel = {
+            id: newId,
+            ...channelData,
+            type_display: channelData.custom_type || channelData.channel_category,
+            total_campaigns: 0,
+            active_campaigns: 0,
+            total_budget: 0,
+            total_investment: 0,
+            budget_utilization_percent: 0,
+            paidUsers: 0,
+            monthlyRevenue: 0,
+            totalRevenue: 0,
+            conversionToPaid: 0,
+            cac: null,
+            channelROI: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          channels.push(newChannel);
+          localStorage.setItem('channels', JSON.stringify(channels));
+          resolve(newChannel);
+        } catch (error) {
+          reject(error);
+        }
+      }, 500);
+    });
+  },
+
+  updateChannel: async (id: number, channelData: any): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          const channels = JSON.parse(localStorage.getItem('channels') || '[]');
+          const index = channels.findIndex((c: any) => c.id === id);
+          
+          if (index === -1) {
+            reject(new Error('Channel not found'));
+            return;
+          }
+          
+          channels[index] = {
+            ...channels[index],
+            ...channelData,
+            type_display: channelData.custom_type || channelData.channel_category || channels[index].type_display,
+            updated_at: new Date().toISOString()
+          };
+          
+          localStorage.setItem('channels', JSON.stringify(channels));
+          resolve(channels[index]);
+        } catch (error) {
+          reject(error);
+        }
+      }, 500);
+    });
+  },
+
+  deleteChannel: async (id: number): Promise<boolean> => {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          const channels = JSON.parse(localStorage.getItem('channels') || '[]');
+          const filteredChannels = channels.filter((c: any) => c.id !== id);
+          
+          if (channels.length === filteredChannels.length) {
+            reject(new Error('Channel not found'));
+            return;
+          }
+          
+          localStorage.setItem('channels', JSON.stringify(filteredChannels));
+          resolve(true);
+        } catch (error) {
+          reject(error);
+        }
+      }, 300);
+    });
+  },
+
+  // Clear existing default data from localStorage (one-time cleanup)
+  clearDefaultData: () => {
+    localStorage.removeItem('campaigns');
+    localStorage.removeItem('channels');
+    console.log('Default mock data cleared from localStorage');
+  },
+
+  // Get Top Channels based on real data
+  getTopChannels: async (limit: number = 5): Promise<any[]> => {
+    const channels = await mockDataService.getChannels();
+    
+    return channels
+      .filter(c => c.is_active && c.total_investment > 0)
+      .sort((a, b) => (b.total_investment || 0) - (a.total_investment || 0))
+      .slice(0, limit)
+      .map(c => ({
+        id: c.id,
+        name: c.name,
+        total_investment: c.total_investment || 0,
+        active_campaigns: c.active_campaigns || 0,
+        budget_utilization_percent: c.budget_utilization_percent || 0,
+        paidUsers: c.paidUsers || 0,
+        cac: c.cac
+      }));
   }
 };
 

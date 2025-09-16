@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Layout } from 'antd';
 import Sidebar from './components/Layout/Sidebar';
@@ -9,11 +9,21 @@ import CampaignDetails from './pages/CampaignDetails';
 import Channels from './pages/Channels';
 import Integrations from './pages/Integrations';
 import FunnelAnalysisV2Router from './pages/FunnelAnalysisV2Router';
+import { mockDataService } from './services/mockData';
 import './App.css';
 
 const { Content } = Layout;
 
 const App: React.FC = () => {
+  // Clear default mock data on app startup (one-time cleanup)
+  useEffect(() => {
+    const hasCleared = localStorage.getItem('defaultDataCleared');
+    if (!hasCleared) {
+      mockDataService.clearDefaultData();
+      localStorage.setItem('defaultDataCleared', 'true');
+    }
+  }, []);
+
   return (
     <Layout className="app-layout">
       <Sidebar />

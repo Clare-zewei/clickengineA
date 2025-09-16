@@ -17,7 +17,7 @@ import {
 import { PlusOutlined } from '@ant-design/icons';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { api } from '../services/api';
+import { mockDataService } from '../services/mockData';
 import { Campaign, CampaignSummary, MarketingChannel, CampaignGoal } from '../types';
 
 const { RangePicker } = DatePicker;
@@ -65,13 +65,16 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
 
   const fetchFormData = async () => {
     try {
-      const [channelsRes, goalsRes] = await Promise.all([
-        api.channels.getAll({ is_active: true }),
-        api.campaigns.getGoals()
+      const [channelsData, goalsData] = await Promise.all([
+        mockDataService.getChannels(),
+        mockDataService.getCampaignGoals()
       ]);
       
-      setChannels(channelsRes.data.data || []);
-      setGoals(goalsRes.data.data || []);
+      // Filter active channels only (no deduplication needed as data source should be unique)
+      const activeChannels = channelsData.filter(channel => channel.is_active);
+      
+      setChannels(activeChannels);
+      setGoals(goalsData || []);
     } catch (error) {
       console.error('Failed to fetch form data:', error);
     }
@@ -102,12 +105,6 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
     }
   };
 
-  const presetChannels = [
-    { name: 'Google Ads', type: 'google_ads' },
-    { name: 'LinkedIn Ads', type: 'linkedin_ads' },
-    { name: 'Facebook Ads', type: 'facebook_ads' },
-    { name: 'Medium Content', type: 'content_marketing' },
-  ];
 
   return (
     <Modal

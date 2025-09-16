@@ -12,8 +12,8 @@ const getApiBaseUrl = () => {
   const currentHost = window.location.hostname;
   const currentPort = window.location.port;
   
-  // 如果通过3000端口访问，直接连接后端API
-  if (currentPort === '3000') {
+  // 如果通过3000或9999端口访问，直接连接后端API
+  if (currentPort === '3000' || currentPort === '9999') {
     return 'http://localhost:3001/api/v1';
   }
   

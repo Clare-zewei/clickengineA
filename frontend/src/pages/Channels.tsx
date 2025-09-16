@@ -19,7 +19,7 @@ import {
   DeleteOutlined
 } from '@ant-design/icons';
 import { api } from '../services/api';
-import { mockDataService, ChannelRevenueData, formatCurrency, formatPercentage } from '../services/mockData';
+import { formatCurrency, formatPercentage } from '../services/mockData'; // Keep formatting utilities
 
 const { Option } = Select;
 
@@ -79,32 +79,23 @@ const Channels: React.FC = () => {
   const fetchChannels = async () => {
     setLoading(true);
     try {
-      const [response, revenueData] = await Promise.all([
-        api.channels.getAll({ include_analytics: true }),
-        mockDataService.getChannelRevenueData()
-      ]);
-      
+      const response = await api.channels.getAll();
       const channelsData = response.data.data || [];
       
-      // Merge channels with revenue data
-      const enhancedChannels = channelsData.map((channel: Channel) => {
-        const revenueInfo = revenueData.find((r: ChannelRevenueData) => r.id === channel.id);
-        const totalSpent = channel.total_investment || 0;
-        const paidUsers = revenueInfo?.paidUsers || 0;
-        const cac = paidUsers > 0 ? totalSpent / paidUsers : null;
-        
-        return {
-          ...channel,
-          monthlyRevenue: revenueInfo?.monthlyRevenue || 0,
-          totalRevenue: revenueInfo?.totalRevenue || 0,
-          paidUsers: paidUsers,
-          conversionToPaid: revenueInfo?.conversionToPaid || 0,
-          cac: cac,
-          channelROI: revenueInfo?.channelROI || 0
-        };
-      });
+      // Add analytics fields if needed (temporarily using mock values)
+      const enrichedChannels = channelsData.map((channel: Channel) => ({
+        ...channel,
+        total_campaigns: channel.total_campaigns || 0,
+        active_campaigns: channel.active_campaigns || 0,
+        total_budget: channel.total_budget || 0,
+        total_investment: channel.total_investment || 0,
+        budget_utilization_percent: channel.budget_utilization_percent || 0,
+        paidUsers: channel.paidUsers || 0,
+        conversionToPaid: channel.conversionToPaid || 0,
+        cac: channel.cac || null
+      }));
       
-      setChannels(enhancedChannels);
+      setChannels(enrichedChannels);
     } catch (error) {
       message.error('Failed to fetch channels');
       console.error('Error fetching channels:', error);
@@ -131,7 +122,7 @@ const Channels: React.FC = () => {
       fetchChannels();
     } catch (error: any) {
       console.error('Error submitting channel:', error);
-      message.error(error.response?.data?.message || 'Failed to save channel');
+      message.error(error.message || 'Failed to save channel');
     }
   };
 
@@ -148,7 +139,7 @@ const Channels: React.FC = () => {
       fetchChannels();
     } catch (error: any) {
       console.error('Error deleting channel:', error);
-      message.error(error.response?.data?.message || 'Failed to delete channel');
+      message.error(error.message || 'Failed to delete channel');
     }
   };
 
@@ -240,12 +231,15 @@ const Channels: React.FC = () => {
       key: 'monthlyRevenue',
       render: (_: unknown, record: Channel) => (
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontWeight: 'bold', color: record.monthlyRevenue && record.monthlyRevenue > 0 ? '#52c41a' : '#999' }}>
-            {formatCurrency(record.monthlyRevenue || 0)}
+          <div style={{ fontWeight: 'bold', color: '#d9d9d9' }}>
+            --
+          </div>
+          <div style={{ fontSize: '10px', color: '#d9d9d9' }}>
+            No revenue data
           </div>
         </div>
       ),
-      sorter: (a: Channel, b: Channel) => (a.monthlyRevenue || 0) - (b.monthlyRevenue || 0),
+      sorter: false, // Disable sorting since no real data
     },
     {
       title: 'Paid Users',
@@ -291,21 +285,17 @@ const Channels: React.FC = () => {
     {
       title: 'Channel ROI',
       key: 'channelROI',
-      render: (_: unknown, record: Channel) => {
-        const roi = record.channelROI || 0;
-        const color = roi >= 200 ? '#52c41a' : roi >= 100 ? '#faad14' : '#ff4d4f';
-        return (
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontWeight: 'bold', color }}>
-              {formatPercentage(roi)}
-            </div>
-            <div style={{ fontSize: '10px', color }}>
-              {roi >= 200 ? 'Excellent' : roi >= 100 ? 'Good' : 'Needs Improvement'}
-            </div>
+      render: (_: unknown, record: Channel) => (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontWeight: 'bold', color: '#d9d9d9' }}>
+            --
           </div>
-        );
-      },
-      sorter: (a: Channel, b: Channel) => (a.channelROI || 0) - (b.channelROI || 0),
+          <div style={{ fontSize: '10px', color: '#d9d9d9' }}>
+            No revenue data
+          </div>
+        </div>
+      ),
+      sorter: false, // Disable sorting since no real data
     },
     {
       title: 'Status',
@@ -397,7 +387,22 @@ const Channels: React.FC = () => {
             label="Channel Name"
             rules={[
               { required: true, message: 'Please enter channel name' },
-              { max: 100, message: 'Name must be less than 100 characters' }
+              { max: 100, message: 'Name must be less than 100 characters' },
+              {
+                validator: async (_, value) => {
+                  if (!value) return;
+                  
+                  // Check if channel name already exists (exclude current channel when editing)
+                  const existingChannel = channels.find(channel => 
+                    channel.name.toLowerCase() === value.toLowerCase() && 
+                    (!editingChannel || channel.id !== editingChannel.id)
+                  );
+                  
+                  if (existingChannel) {
+                    throw new Error('Channel name already exists. Please choose a different name.');
+                  }
+                }
+              }
             ]}
           >
             <Input placeholder="e.g. TikTok Ads" />
